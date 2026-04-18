@@ -443,6 +443,13 @@
         && value.length > 100;
     }
 
+    function getImageFingerprint(value) {
+      if (!isValidImageData(value)) {
+        return "";
+      }
+      return `${value.length}:${value.slice(0, 32)}:${value.slice(-32)}`;
+    }
+
     function canEnterConvergeFlow() {
       const currentStep = safeGetItem("currentStep", "");
       const uploadedImage = safeGetItem("uploadedImage", "");
@@ -760,6 +767,11 @@
           showToast("生成结果保存失败", "Generated image could not be stored.");
           return;
         }
+
+        const generatedFingerprint = getImageFingerprint(storedGeneratedImage);
+        safeSetItem("finalUploadFingerprint", generatedFingerprint);
+        safeSetItem("finalUploadStatus", "ready");
+        safeSetItem("finalUploadConfirmedAt", "");
 
         if (!safeSetItem("currentStep", "message")) {
           showToast("流程状态写入失败", "Flow state could not be stored.");

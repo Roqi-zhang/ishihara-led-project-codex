@@ -43,13 +43,14 @@
 - Task 1: fix the six existing frontend HTML files so all inter-page `window.location.href` routes use the real current filenames under `frontend/`.
 - Task 2: add defensive localStorage guards and fallback behavior so missing or inaccessible client storage does not cause blank screens or uncaught frontend errors.
 - Task 3: tighten the Resonance page Converge trigger so page 4 cannot proceed unless the flow is at `currentStep=resonance` and a valid rendered image has been produced and stored successfully.
+- Task 4: keep Converge upload-free and move the one-time upload trigger to the final confirmation button on page 6, using a simulated upload lock plus per-image completion markers.
 
 ## Next tasks
-1. Task 4: connect Resonance page to `POST /upload_generated` only when user confirms via `Converge`.
-2. Task 5: connect Message page submission to `POST /mark_shown`.
-3. Task 6: verify Inscribe page download and print flow.
-4. Task 7: verify and, if needed, tighten missing-state toast/redirect behavior across the flow.
-5. Task 8: verify full end-to-end flow without visual regressions.
+1. Task 5: replace the simulated final-confirmation upload on page 6 with the real `POST /upload_generated` request.
+2. Task 6: connect Message page submission to `POST /mark_shown`.
+3. Task 7: verify Inscribe page download and print flow.
+4. Task 8: verify and, if needed, tighten missing-state toast/redirect behavior across the flow.
+5. Task 9: verify full end-to-end flow without visual regressions.
 
 ## Risks
 - Local Wi-Fi to Supabase HTTPS may be unstable.

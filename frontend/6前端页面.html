@@ -341,6 +341,33 @@
       }
     }
 
+    function isValidImageData(value) {
+      return typeof value === 'string'
+        && value.startsWith('data:image/')
+        && value.includes('base64,')
+        && value.length > 100;
+    }
+
+    function getImageFingerprint(value) {
+      if (!isValidImageData(value)) {
+        return "";
+      }
+      return `${value.length}:${value.slice(0, 32)}:${value.slice(-32)}`;
+    }
+
+    function simulateFinalUpload(payload) {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            ok: true,
+            simulated: true,
+            uploadedAt: new Date().toISOString(),
+            fingerprint: payload.fingerprint
+          });
+        }, 600);
+      });
+    }
+
     // ══════════════════════════════════════════════════════════════
     //  复用逻辑：丝绸背景 (Silk Background)
     // ══════════════════════════════════════════════════════════════
@@ -408,6 +435,7 @@
     }
 
     let imageDataUrl = null;
+    let isUploadSubmitting = false;
 
     window.onload = () => {
       document.body.style.opacity = 1;
@@ -424,6 +452,16 @@
         setTimeout(() => { window.location.href = '4前端页面.html'; }, 2000);
       };
       finalImage.src = imageDataUrl;
+
+      const currentFingerprint = getImageFingerprint(imageDataUrl);
+      const storedFingerprint = safeGetItem("finalUploadFingerprint", "");
+      const storedStatus = safeGetItem("finalUploadStatus", "");
+
+      if (currentFingerprint && (storedFingerprint !== currentFingerprint || !storedStatus)) {
+        safeSetItem("finalUploadFingerprint", currentFingerprint);
+        safeSetItem("finalUploadStatus", "ready");
+        safeSetItem("finalUploadConfirmedAt", "");
+      }
     };
 
     // ══════════════════════════════════════════════════════════════
@@ -434,6 +472,27 @@
     const printModal = document.getElementById('printModal');
     const modalCancel = document.getElementById('modalCancel');
     const modalConfirm = document.getElementById('modalConfirm');
+
+    function closePrintModal() {
+      printModal.classList.remove('show');
+      setTimeout(() => { printModal.style.display = 'none'; }, 400);
+    }
+
+    function canConfirmFinalUpload() {
+      const currentStep = safeGetItem("currentStep", "");
+
+      if (currentStep !== "inscribe") {
+        showToast("请先完成前置步骤", "Please finish the previous step first.");
+        return false;
+      }
+
+      if (!isValidImageData(imageDataUrl)) {
+        showToast("未发现有效图像", "No valid generated image was found.");
+        return false;
+      }
+
+      return true;
+    }
 
     downloadBtn.addEventListener('click', () => {
       if (!imageDataUrl) return;
@@ -456,20 +515,66 @@
     });
 
     modalCancel.addEventListener('click', () => {
-      printModal.classList.remove('show');
-      setTimeout(() => { printModal.style.display = 'none'; }, 400);
+      closePrintModal();
     });
 
-    modalConfirm.addEventListener('click', () => {
-      if (!imageDataUrl) {
-        showToast("未发现可打印图像", "No image available for print.");
+    modalConfirm.addEventListener('click', async () => {
+      if (!canConfirmFinalUpload()) {
         return;
       }
-      printModal.classList.remove('show');
-      setTimeout(() => { 
-        printModal.style.display = 'none'; 
-        window.print(); 
-      }, 400);
+
+      const currentFingerprint = getImageFingerprint(imageDataUrl);
+      if (!currentFingerprint) {
+        showToast("未发现有效图像", "No valid generated image was found.");
+        return;
+      }
+
+      const storedFingerprint = safeGetItem("finalUploadFingerprint", "");
+      const storedStatus = safeGetItem("finalUploadStatus", "");
+
+      if (isUploadSubmitting || (storedStatus === "pending" && storedFingerprint === currentFingerprint)) {
+        showToast("正在确认中，请稍候", "Confirmation is already in progress.");
+        return;
+      }
+
+      if (storedStatus === "done" && storedFingerprint === currentFingerprint) {
+        closePrintModal();
+        setTimeout(() => { window.print(); }, 400);
+        return;
+      }
+
+      isUploadSubmitting = true;
+
+      if (!safeSetItem("finalUploadFingerprint", currentFingerprint) || !safeSetItem("finalUploadStatus", "pending")) {
+        isUploadSubmitting = false;
+        showToast("确认状态写入失败", "Could not lock confirmation state.");
+        return;
+      }
+
+      try {
+        const result = await simulateFinalUpload({
+          fingerprint: currentFingerprint,
+          generatedImage: imageDataUrl
+        });
+
+        if (!result || !result.ok) {
+          throw new Error("simulated upload failed");
+        }
+
+        if (!safeSetItem("finalUploadStatus", "done") || !safeSetItem("finalUploadConfirmedAt", result.uploadedAt || "")) {
+          throw new Error("could not persist confirmation state");
+        }
+
+        showToast("已确认归档，准备打印", "Archive confirmed. Preparing print.");
+        closePrintModal();
+        setTimeout(() => { window.print(); }, 400);
+      } catch (error) {
+        console.error("Final confirmation upload failed:", error);
+        safeSetItem("finalUploadStatus", "ready");
+        showToast("确认归档失败，请重试", "Archive confirmation failed. Please retry.");
+      } finally {
+        isUploadSubmitting = false;
+      }
     });
 
     function showToast(cn, en) {
