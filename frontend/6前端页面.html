@@ -355,17 +355,68 @@
       return `${value.length}:${value.slice(0, 32)}:${value.slice(-32)}`;
     }
 
-    function simulateFinalUpload(payload) {
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            ok: true,
-            simulated: true,
-            uploadedAt: new Date().toISOString(),
-            fingerprint: payload.fingerprint
-          });
-        }, 600);
+    function getBackendBaseUrl() {
+      const savedBase = safeGetItem("ISHIHARA_BACKEND_URL", "").trim();
+      if (savedBase) {
+        return savedBase.replace(/\/+$/, "");
+      }
+
+      if (window.location && window.location.origin && window.location.origin !== "null") {
+        return window.location.origin.replace(/\/+$/, "");
+      }
+
+      return "http://127.0.0.1:5000";
+    }
+
+    function buildFinalUploadPayload() {
+      const payload = {
+        imageBase64: imageDataUrl,
+        symbol: "74",
+        sourceName: "web"
+      };
+
+      const originalImageBase64 = safeGetItem("uploadedImage", "");
+      if (isValidImageData(originalImageBase64)) {
+        payload.originalImageBase64 = originalImageBase64;
+      }
+
+      return payload;
+    }
+
+    async function uploadGeneratedImage(payload) {
+      const response = await fetch(`${getBackendBaseUrl()}/upload_generated`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
       });
+
+      let result = {};
+      try {
+        result = await response.json();
+      } catch (error) {
+        result = {};
+      }
+
+      if (!response.ok || !result || result.ok !== true) {
+        const message = result && typeof result.error === "string" && result.error.trim()
+          ? result.error.trim()
+          : `upload_failed_${response.status}`;
+        throw new Error(message);
+      }
+
+      const submissionId = result && result.submission && typeof result.submission.id === "string"
+        ? result.submission.id.trim()
+        : "";
+      if (!submissionId) {
+        throw new Error("missing_submission_id");
+      }
+
+      return {
+        submissionId,
+        uploadedAt: new Date().toISOString()
+      };
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -552,13 +603,10 @@
       }
 
       try {
-        const result = await simulateFinalUpload({
-          fingerprint: currentFingerprint,
-          generatedImage: imageDataUrl
-        });
+        const result = await uploadGeneratedImage(buildFinalUploadPayload());
 
-        if (!result || !result.ok) {
-          throw new Error("simulated upload failed");
+        if (!safeSetItem("submissionId", result.submissionId)) {
+          throw new Error("persist_submission_id_failed");
         }
 
         if (!safeSetItem("finalUploadStatus", "done") || !safeSetItem("finalUploadConfirmedAt", result.uploadedAt || "")) {
