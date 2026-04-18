@@ -190,9 +190,29 @@
       startTransition();
     };
 
+    function safeGetItem(key, fallback = "") {
+      try {
+        const value = localStorage.getItem(key);
+        return value == null ? fallback : value;
+      } catch (error) {
+        console.warn(`localStorage get failed for ${key}`, error);
+        return fallback;
+      }
+    }
+
+    function safeSetItem(key, value) {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (error) {
+        console.warn(`localStorage set failed for ${key}`, error);
+        return false;
+      }
+    }
+
     // 逻辑：检查数据并自动跳转 
     function startTransition() {
-      const uploadedImage = localStorage.getItem("uploadedImage");
+      const uploadedImage = safeGetItem("uploadedImage", "");
       
       if (!uploadedImage) {
         showToast("检测不到前置数据，请返回重试", "Data missing. Returning to previous step.");
@@ -204,7 +224,7 @@
 
       // 模拟转译过程 3 秒 
       setTimeout(() => {
-        localStorage.setItem("currentStep", "resonance");
+        safeSetItem("currentStep", "resonance");
         document.body.style.opacity = 0;
         
         setTimeout(() => {

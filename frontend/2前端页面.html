@@ -253,6 +253,16 @@
   <script>
     window.onload = () => { document.body.style.opacity = 1; };
 
+    function safeSetItem(key, value) {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (error) {
+        console.warn(`localStorage set failed for ${key}`, error);
+        return false;
+      }
+    }
+
     const fileInput = document.getElementById('fileInput');
     const imagePreview = document.getElementById('image-preview');
     const uploadPlaceholder = document.getElementById('uploadPlaceholder');
@@ -268,7 +278,11 @@
       if (file) {
         const reader = new FileReader();
         reader.onload = function(event) {
-          const base64Image = event.target.result;
+          const base64Image = typeof event.target.result === 'string' ? event.target.result : '';
+          if (!base64Image) {
+            showToast("图片读取失败，请重试", "Image read failed. Please try again.");
+            return;
+          }
           imagePreview.src = base64Image;
           imagePreview.style.display = 'block';
           uploadPlaceholder.style.display = 'none';
@@ -276,7 +290,9 @@
           
           // 存储到 localStorage
           try {
-            localStorage.setItem("uploadedImage", base64Image);
+            if (!safeSetItem("uploadedImage", base64Image)) {
+              throw new Error("storage unavailable");
+            }
             hasImage = true;
             continueBtn.classList.remove('disabled');
           } catch (e) {
@@ -295,7 +311,7 @@
         return;
       }
       
-      localStorage.setItem("currentStep", "translating");
+      safeSetItem("currentStep", "translating");
       document.body.style.opacity = 0;
       
       setTimeout(() => {

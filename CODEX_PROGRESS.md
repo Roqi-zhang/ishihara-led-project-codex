@@ -41,18 +41,14 @@
 - Codex must now treat frontend UI as fixed.
 - Git Task 1: connect the local repository to GitHub and establish the `codex/integration` baseline checkpoint with an explicit whitelist only.
 - Task 1: fix the six existing frontend HTML files so all inter-page `window.location.href` routes use the real current filenames under `frontend/`.
+- Task 2: add defensive localStorage guards and fallback behavior so missing or inaccessible client storage does not cause blank screens or uncaught frontend errors.
 
 ## Next tasks
-1. Task 2: verify and tighten cross-page state persistence with localStorage for:
-   - `uploadedImage`
-   - `generatedImage`
-   - `submissionId`
-   - `userMessage`
-2. Task 3: connect Resonance page to `POST /upload_generated` only when user confirms via `Converge`.
-3. Task 4: connect Message page submission to `POST /mark_shown`.
-4. Task 5: verify Inscribe page download and print flow.
-5. Task 6: add minimal error handling and toast fallback for missing state.
-6. Task 7: verify full end-to-end flow without visual regressions.
+1. Task 3: connect Resonance page to `POST /upload_generated` only when user confirms via `Converge`.
+2. Task 4: connect Message page submission to `POST /mark_shown`.
+3. Task 5: verify Inscribe page download and print flow.
+4. Task 6: verify and, if needed, tighten missing-state toast/redirect behavior across the flow.
+5. Task 7: verify full end-to-end flow without visual regressions.
 
 ## Risks
 - Local Wi-Fi to Supabase HTTPS may be unstable.

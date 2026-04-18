@@ -245,6 +245,26 @@
   </div>
 
   <script>
+    function safeGetItem(key, fallback = "") {
+      try {
+        const value = localStorage.getItem(key);
+        return value == null ? fallback : value;
+      } catch (error) {
+        console.warn(`localStorage get failed for ${key}`, error);
+        return fallback;
+      }
+    }
+
+    function safeSetItem(key, value) {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (error) {
+        console.warn(`localStorage set failed for ${key}`, error);
+        return false;
+      }
+    }
+
     // ══════════════════════════════════════════════════════════════
     //  初始化检查逻辑
     // ══════════════════════════════════════════════════════════════
@@ -252,7 +272,7 @@
       document.body.style.opacity = 1;
       
       // 异常处理：检查前序图像数据是否存在
-      const generatedImage = localStorage.getItem("generatedImage");
+      const generatedImage = safeGetItem("generatedImage", "");
       if (!generatedImage) {
         showToast("缺失前序图像数据，正在返回", "Missing image data. Returning.");
         setTimeout(() => {
@@ -282,8 +302,8 @@
     codifyBtn.addEventListener('click', () => {
       // 保存留言痕迹
       const msg = messageInput.value.trim();
-      localStorage.setItem("userMessage", msg);
-      localStorage.setItem("currentStep", "inscribe");
+      safeSetItem("userMessage", msg);
+      safeSetItem("currentStep", "inscribe");
       
       // 优雅退场动画
       document.body.style.opacity = 0;

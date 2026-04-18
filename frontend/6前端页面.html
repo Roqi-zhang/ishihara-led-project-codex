@@ -321,6 +321,26 @@
   </div>
 
   <script>
+    function safeGetItem(key, fallback = "") {
+      try {
+        const value = localStorage.getItem(key);
+        return value == null ? fallback : value;
+      } catch (error) {
+        console.warn(`localStorage get failed for ${key}`, error);
+        return fallback;
+      }
+    }
+
+    function safeSetItem(key, value) {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (error) {
+        console.warn(`localStorage set failed for ${key}`, error);
+        return false;
+      }
+    }
+
     // ══════════════════════════════════════════════════════════════
     //  复用逻辑：丝绸背景 (Silk Background)
     // ══════════════════════════════════════════════════════════════
@@ -373,13 +393,16 @@
     //  状态管理与初始化
     // ══════════════════════════════════════════════════════════════
     function getUploadSequence() {
-      let seq = localStorage.getItem('userSequence');
+      let seq = safeGetItem('userSequence', '');
       if (!seq) {
-        let globalCount = parseInt(localStorage.getItem('globalUploadCount') || '0');
+        let globalCount = parseInt(safeGetItem('globalUploadCount', '0'), 10);
+        if (Number.isNaN(globalCount) || globalCount < 0) {
+          globalCount = 0;
+        }
         globalCount++;
-        localStorage.setItem('globalUploadCount', globalCount);
+        safeSetItem('globalUploadCount', String(globalCount));
         seq = String(globalCount).padStart(3, '0');
-        localStorage.setItem('userSequence', seq);
+        safeSetItem('userSequence', seq);
       }
       return seq;
     }
@@ -388,14 +411,19 @@
 
     window.onload = () => {
       document.body.style.opacity = 1;
-      imageDataUrl = localStorage.getItem("generatedImage");
+      imageDataUrl = safeGetItem("generatedImage", "");
       
       if (!imageDataUrl) {
         showToast("未发现可归档的痕迹，正在返回", "No trace found. Returning.");
         setTimeout(() => { window.location.href = '4前端页面.html'; }, 2000);
         return;
       }
-      document.getElementById('finalImage').src = imageDataUrl;
+      const finalImage = document.getElementById('finalImage');
+      finalImage.onerror = () => {
+        showToast("图像数据异常，正在返回", "Image data is invalid. Returning.");
+        setTimeout(() => { window.location.href = '4前端页面.html'; }, 2000);
+      };
+      finalImage.src = imageDataUrl;
     };
 
     // ══════════════════════════════════════════════════════════════
@@ -417,6 +445,10 @@
     });
 
     printBtn.addEventListener('click', () => {
+      if (!imageDataUrl) {
+        showToast("未发现可打印图像", "No image available for print.");
+        return;
+      }
       const currentSeq = getUploadSequence();
       document.getElementById('modalText').textContent = `代号${currentSeq}归序者，请完成相纸使用的序值缴纳，以继续通行。`;
       printModal.style.display = 'flex';
@@ -429,6 +461,10 @@
     });
 
     modalConfirm.addEventListener('click', () => {
+      if (!imageDataUrl) {
+        showToast("未发现可打印图像", "No image available for print.");
+        return;
+      }
       printModal.classList.remove('show');
       setTimeout(() => { 
         printModal.style.display = 'none'; 
