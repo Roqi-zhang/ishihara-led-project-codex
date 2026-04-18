@@ -408,6 +408,7 @@
     // ══════════════════════════════════════════════════════════════
     let baseImage = null;
     let isFirstRender = true;
+    let hasRenderedOutput = false;
     let renderTimer = null;
 
     const SCHEMES = [
@@ -434,6 +435,41 @@
     ];
 
     let currentScheme = SCHEMES[0];
+
+    function isValidImageData(value) {
+      return typeof value === 'string'
+        && value.startsWith('data:image/')
+        && value.includes('base64,')
+        && value.length > 100;
+    }
+
+    function canEnterConvergeFlow() {
+      const currentStep = safeGetItem("currentStep", "");
+      const uploadedImage = safeGetItem("uploadedImage", "");
+      const outputCanvas = document.getElementById('outputCanvas');
+
+      if (currentStep !== "resonance") {
+        showToast("请先完成前置步骤", "Please finish the previous step first.");
+        return false;
+      }
+
+      if (!isValidImageData(uploadedImage)) {
+        showToast("原始图像状态缺失", "Source image state is missing.");
+        return false;
+      }
+
+      if (!baseImage || !baseImage.complete || !baseImage.naturalWidth || !baseImage.naturalHeight) {
+        showToast("图像尚未准备完成", "Image state is not ready yet.");
+        return false;
+      }
+
+      if (!outputCanvas || !hasRenderedOutput) {
+        showToast("图像尚未生成完成", "Generated image is not ready yet.");
+        return false;
+      }
+
+      return true;
+    }
 
     // 初始化 UI 组件
     (function initUI() {
@@ -474,6 +510,7 @@
     function triggerReRender() {
       if (!baseImage) return;
       const oc = document.getElementById('outputCanvas');
+      hasRenderedOutput = false;
       oc.style.opacity = 0.5; // 给用户正在计算的反馈
       clearTimeout(renderTimer);
       renderTimer = setTimeout(() => {
@@ -688,6 +725,8 @@
         ctx.fill();
       }
 
+      hasRenderedOutput = true;
+
       if (isFirstRender) {
         document.getElementById('outputWrap').style.opacity = 1;
         document.getElementById('controlsPanel').style.opacity = 1;
@@ -701,15 +740,33 @@
     // ══════════════════════════════════════════════════════════════
     const convergeBtn = document.getElementById('convergeBtn');
     convergeBtn.addEventListener('click', () => {
-      showToast("已汇聚，请留步观看", "All has converged. Stay to witness.");
+      if (!canEnterConvergeFlow()) {
+        return;
+      }
       
       try {
         const oc = document.getElementById('outputCanvas');
         const generatedImage = oc.toDataURL('image/png');
+        if (!isValidImageData(generatedImage)) {
+          showToast("图像尚未生成完成", "Generated image is not ready yet.");
+          return;
+        }
+
         if (!safeSetItem("generatedImage", generatedImage)) {
           throw new Error("generated image storage unavailable");
         }
-        safeSetItem("currentStep", "message");
+        const storedGeneratedImage = safeGetItem("generatedImage", "");
+        if (!isValidImageData(storedGeneratedImage)) {
+          showToast("生成结果保存失败", "Generated image could not be stored.");
+          return;
+        }
+
+        if (!safeSetItem("currentStep", "message")) {
+          showToast("流程状态写入失败", "Flow state could not be stored.");
+          return;
+        }
+
+        showToast("已汇聚，请留步观看", "All has converged. Stay to witness.");
         
         setTimeout(() => {
           document.body.style.opacity = 0;
