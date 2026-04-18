@@ -40,20 +40,19 @@
 - Previous frontend generation phase is considered complete outside Codex.
 - Codex must now treat frontend UI as fixed.
 - Git Task 1: connect the local repository to GitHub and establish the `codex/integration` baseline checkpoint with an explicit whitelist only.
+- Task 1: fix the six existing frontend HTML files so all inter-page `window.location.href` routes use the real current filenames under `frontend/`.
 
 ## Next tasks
-1. Task 1: inspect existing frontend pages and confirm integration points in Ask mode only.
-2. Task 2: connect page routing flow (`reminders -> reflect -> translating -> resonance -> message -> inscribe`).
-3. Task 3: implement cross-page state persistence with localStorage for:
+1. Task 2: verify and tighten cross-page state persistence with localStorage for:
    - `uploadedImage`
    - `generatedImage`
    - `submissionId`
    - `userMessage`
-4. Task 4: connect Resonance page to `POST /upload_generated` only when user confirms via `Converge`.
-5. Task 5: connect Message page submission to `POST /mark_shown`.
-6. Task 6: implement Inscribe page download and print flow.
-7. Task 7: add minimal error handling and toast fallback for missing state.
-8. Task 8: verify full end-to-end flow without visual regressions.
+2. Task 3: connect Resonance page to `POST /upload_generated` only when user confirms via `Converge`.
+3. Task 4: connect Message page submission to `POST /mark_shown`.
+4. Task 5: verify Inscribe page download and print flow.
+5. Task 6: add minimal error handling and toast fallback for missing state.
+6. Task 7: verify full end-to-end flow without visual regressions.
 
 ## Risks
 - Local Wi-Fi to Supabase HTTPS may be unstable.
