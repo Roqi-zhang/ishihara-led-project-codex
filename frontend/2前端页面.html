@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Reflect - 思考</title>
+  <style>
+    /* 全局 CSS 变量 (与第一页保持统一) */
+    :root {
+      --bg: #050505;
+      --panel: rgba(255, 255, 255, 0.05);
+      --line: rgba(255, 255, 255, 0.1);
+      --text: #ffffff;
+      --muted: #666666;
+      --accent: rgba(255, 255, 255, 0.9);
+      --glass: rgba(255, 255, 255, 0.08);
+      --radius: 12px;
+      --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: "PingFang SC", "Helvetica Neue", Helvetica, sans-serif;
+      overflow-x: hidden;
+      opacity: 0;
+      transition: opacity 1.2s var(--ease);
+    }
+
+    /* 顶层容器：应用安全边距 */
+    .app {
+      position: relative;
+      width: 100vw;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 32px 40px 32px; /* 顶部 24px, 底部 40px */
+    }
+
+    .screen {
+      width: 100%;
+      max-width: 500px;
+      margin: 0 auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 标题排版 */
+    .header {
+      margin-top: 20px;
+      margin-bottom: 40px;
+    }
+    .title-cn {
+      font-size: 20px;
+      font-weight: 300;
+      letter-spacing: 2px;
+      margin-bottom: 4px;
+    }
+    .title-en {
+      font-family: "Times New Roman", serif;
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* 说明文案 */
+    .instruction {
+      margin-bottom: 40px;
+    }
+    .body-cn {
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .body-en {
+      font-family: "Times New Roman", serif;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* 上传组件区域 */
+    .upload-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 40px;
+    }
+
+    .upload-box {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.5s var(--ease);
+      cursor: pointer; /* 增加鼠标手型提示可点击 */
+    }
+
+    .upload-box.has-image {
+      border-style: solid;
+      border-color: var(--glass);
+    }
+
+    #image-preview {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+      filter: brightness(0.8);
+    }
+
+    /* 确保占位符内的元素完美居中对齐 */
+    #uploadPlaceholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 2; /* 确保在预览图之上(如果有过渡状态的话) */
+    }
+
+    .upload-icon {
+      width: 60px;
+      height: 60px;
+      border: 1px solid var(--muted);
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 20px;
+      color: var(--muted);
+      font-weight: 100;
+      font-size: 28px;
+    }
+
+    /* 按钮排版 */
+    .footer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .primary-btn {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--glass);
+      padding: 16px;
+      border-radius: 100px;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: all 0.4s var(--ease);
+      text-decoration: none;
+    }
+
+    .primary-btn.disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .btn-cn { font-size: 14px; letter-spacing: 2px; }
+    .btn-en { font-family: "Times New Roman", serif; font-size: 10px; color: var(--muted); text-transform: uppercase; }
+
+    /* Toast 样式 */
+    .toast-wrap {
+      position: fixed;
+      top: -100px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      transition: top 0.6s var(--ease);
+      z-index: 1000;
+    }
+    .toast {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 12px 24px;
+      border-radius: 100px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: center;
+    }
+    .toast-cn { font-size: 13px; color: #fff; display: block; }
+    .toast-en { font-size: 10px; color: #aaa; display: block; }
+
+  </style>
+</head>
+<body>
+
+  <div class="toast-wrap" id="toast">
+    <div class="toast">
+      <span class="toast-cn">请先提供一张图像</span>
+      <span class="toast-en">Please provide an image first.</span>
+    </div>
+  </div>
+
+  <div class="app">
+    <div class="screen">
+      <div class="header">
+        <h1 class="title-cn">Reflect 思考</h1>
+        <div class="title-en">Reflect</div>
+      </div>
+
+      <div class="instruction">
+        <p class="body-cn">请围绕着“一件机器永远无法替你完成的小事是什么？”思考，并提供一张能表达你想法的图像</p>
+        <p class="body-en">Ponder this question: What small act can never be done by machines? Provide an image to visualize your insight.</p>
+      </div>
+
+      <div class="upload-container">
+        <div class="upload-box" id="uploadBox" onclick="document.getElementById('fileInput').click()">
+          <img id="image-preview" alt="Preview">
+          <div id="uploadPlaceholder">
+            <div class="upload-icon">+</div>
+            <p class="btn-en">Select Image</p>
+          </div>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+      </div>
+
+      <div class="footer">
+        <button class="primary-btn disabled" id="continueBtn">
+          <span class="btn-cn">继续</span>
+          <span class="btn-en">Continue</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.onload = () => { document.body.style.opacity = 1; };
+
+    const fileInput = document.getElementById('fileInput');
+    const imagePreview = document.getElementById('image-preview');
+    const uploadPlaceholder = document.getElementById('uploadPlaceholder');
+    const uploadBox = document.getElementById('uploadBox');
+    const continueBtn = document.getElementById('continueBtn');
+    const toast = document.getElementById('toast');
+
+    let hasImage = false;
+
+    // 处理文件上传
+    fileInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const base64Image = event.target.result;
+          imagePreview.src = base64Image;
+          imagePreview.style.display = 'block';
+          uploadPlaceholder.style.display = 'none';
+          uploadBox.classList.add('has-image');
+          
+          // 存储到 localStorage
+          try {
+            localStorage.setItem("uploadedImage", base64Image);
+            hasImage = true;
+            continueBtn.classList.remove('disabled');
+          } catch (e) {
+            console.error("Storage error: Image too large");
+            showToast("图片过大，请尝试较小的图片", "Image too large, please try a smaller one.");
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // 跳转逻辑
+    continueBtn.addEventListener('click', () => {
+      if (!hasImage) {
+        showToast("请先提供一张图像", "Please provide an image first.");
+        return;
+      }
+      
+      localStorage.setItem("currentStep", "translating");
+      document.body.style.opacity = 0;
+      
+      setTimeout(() => {
+        window.location.href = 'page-translating.html';
+      }, 1000);
+    });
+
+    // Toast 逻辑
+    function showToast(cn, en) {
+      const cnEl = toast.querySelector('.toast-cn');
+      const enEl = toast.querySelector('.toast-en');
+      cnEl.textContent = cn;
+      enEl.textContent = en;
+      
+      toast.style.top = '40px';
+      setTimeout(() => {
+        toast.style.top = '-100px';
+      }, 3000);
+    }
+  </script>
+</body>
+</html>

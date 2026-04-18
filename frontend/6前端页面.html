@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Inscribe - 留存</title>
+  <style>
+    /* 全局 CSS 变量 (统一视觉 token) */
+    :root {
+      --bg: #030303;
+      --text: #ffffff;
+      --muted: #555555;
+      --accent: rgba(255, 255, 255, 0.85);
+      --glass: rgba(255, 255, 255, 0.06);
+      --line: rgba(255, 255, 255, 0.08);
+      --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: "PingFang SC", "Helvetica Neue", Helvetica, sans-serif;
+      overflow-x: hidden;
+      opacity: 0;
+      transition: opacity 2s var(--ease);
+    }
+
+    /* 动态丝绸背景 (同步任务 4 视觉) */
+    #silk-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* 顶层容器：安全边距 */
+    .app {
+      position: relative;
+      width: 100vw;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 32px 40px 32px; 
+      z-index: 1;
+    }
+
+    .screen {
+      width: 100%;
+      max-width: 500px;
+      margin: 0 auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* 标题排版 */
+    .header {
+      margin-top: 40px;
+      margin-bottom: 50px;
+      text-align: center;
+      opacity: 0;
+      animation: fadeIn 2s var(--ease) 0.5s forwards;
+    }
+    .title-cn {
+      font-size: 20px;
+      font-weight: 300;
+      letter-spacing: 4px;
+      margin-bottom: 4px;
+      color: var(--accent);
+    }
+    .title-en {
+      font-family: "Times New Roman", serif;
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* 核心视觉：归档图像 */
+    .archive-wrap {
+      width: 100%;
+      max-width: 320px;
+      aspect-ratio: 1 / 1;
+      border-radius: 50%;
+      position: relative;
+      margin-bottom: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.2);
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.8), 0 0 40px rgba(255,255,255,0.02);
+      opacity: 0;
+      animation: fadeIn 2s var(--ease) 1s forwards;
+    }
+
+    #finalImage {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: contain;
+      filter: drop-shadow(0 0 10px rgba(255,255,255,0.05));
+    }
+
+    /* 按钮排版 */
+    .footer {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      margin-top: auto;
+      opacity: 0;
+      animation: fadeIn 2s var(--ease) 1.5s forwards;
+    }
+
+    .action-btn {
+      width: 100%;
+      background: transparent;
+      padding: 16px;
+      border-radius: 100px;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: all 0.4s var(--ease);
+      text-decoration: none;
+    }
+
+    .btn-download { border: 1px solid var(--glass); }
+    .btn-download:hover { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.2); }
+    .btn-print { border: 1px dashed var(--line); color: var(--muted); }
+    .btn-print:hover { border-color: rgba(255, 255, 255, 0.15); color: var(--accent); }
+    .btn-cn { font-size: 14px; letter-spacing: 2px; }
+    .btn-en { font-family: "Times New Roman", serif; font-size: 10px; text-transform: uppercase; margin-top: 2px; }
+
+    /* 打印校验弹窗样式 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 2000;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      transition: opacity 0.4s var(--ease);
+    }
+    .modal-overlay.show {
+      display: flex;
+      opacity: 1;
+    }
+    .modal-content {
+      background: rgba(15, 15, 15, 0.85);
+      border: 1px solid var(--glass);
+      border-radius: 16px;
+      padding: 36px 24px;
+      width: 85%;
+      max-width: 340px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.05);
+      transform: translateY(20px);
+      transition: transform 0.4s var(--ease);
+    }
+    .modal-overlay.show .modal-content {
+      transform: translateY(0);
+    }
+    .modal-text {
+      font-size: 14px;
+      color: var(--accent);
+      line-height: 1.6;
+      margin-bottom: 32px;
+      letter-spacing: 1px;
+      font-weight: 300;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+    .modal-btn {
+      flex: 1;
+      padding: 14px 0;
+      border-radius: 100px;
+      font-size: 14px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.3s var(--ease);
+    }
+    .modal-confirm {
+      background: var(--text);
+      border: 1px solid var(--text);
+      color: var(--bg);
+      font-weight: 500;
+    }
+    .modal-confirm:hover {
+      background: var(--accent);
+    }
+    .modal-cancel {
+      background: transparent;
+      border: 1px solid var(--muted);
+      color: var(--muted);
+    }
+    .modal-cancel:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Toast 样式 */
+    .toast-wrap {
+      position: fixed;
+      top: -100px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      transition: top 0.6s var(--ease);
+      z-index: 1000;
+    }
+    .toast {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 12px 24px;
+      border-radius: 100px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: center;
+    }
+    .toast-cn { font-size: 13px; color: #fff; display: block; margin-bottom: 2px; }
+    .toast-en { font-size: 10px; color: #aaa; display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 专为打印设计的干净样式 */
+    @media print {
+      body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        opacity: 1 !important;
+      }
+      #silk-bg, .header, .footer, .toast-wrap, .modal-overlay {
+        display: none !important;
+      }
+      .app {
+        padding: 0 !important;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+      .archive-wrap {
+        background: transparent !important;
+        box-shadow: none !important;
+        max-width: 15cm; 
+      }
+      #finalImage {
+        filter: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="toast-wrap" id="toast">
+    <div class="toast">
+      <span class="toast-cn" id="toastCn"></span>
+      <span class="toast-en" id="toastEn"></span>
+    </div>
+  </div>
+
+  <canvas id="silk-bg"></canvas>
+
+  <div class="app">
+    <div class="screen">
+      <div class="header">
+        <h1 class="title-cn">留存</h1>
+        <div class="title-en">Inscribe</div>
+      </div>
+
+      <div class="archive-wrap">
+        <img id="finalImage" alt="Inscribed Resonance Pattern">
+      </div>
+
+      <div class="footer">
+        <button class="action-btn btn-download" id="downloadBtn">
+          <span class="btn-cn">下载</span>
+          <span class="btn-en">Download</span>
+        </button>
+        
+        <button class="action-btn btn-print" id="printBtn">
+          <span class="btn-cn">打印</span>
+          <span class="btn-en">Print</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="printModal">
+    <div class="modal-content">
+      <p class="modal-text" id="modalText">代号001归序者，请完成相纸使用的序值缴纳，以继续通行。</p>
+      
+      <div class="modal-actions">
+        <button class="modal-btn modal-confirm" id="modalConfirm">打印</button>
+        <button class="modal-btn modal-cancel" id="modalCancel">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ══════════════════════════════════════════════════════════════
+    //  复用逻辑：丝绸背景 (Silk Background)
+    // ══════════════════════════════════════════════════════════════
+    (function initSilkBackground() {
+      const canvas = document.getElementById('silk-bg');
+      const ctx = canvas.getContext('2d');
+      let width, height;
+
+      function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      let time = 0;
+      const speed = 0.003; 
+      const lines = 80; 
+
+      function drawSilk() {
+        ctx.fillStyle = '#030303'; 
+        ctx.fillRect(0, 0, width, height);
+        ctx.lineWidth = 1;
+        ctx.globalCompositeOperation = 'lighter'; 
+
+        for (let i = 0; i < lines; i++) {
+          ctx.beginPath();
+          const alpha = 0.02 + (i / lines) * 0.04;
+          ctx.strokeStyle = `rgba(123, 116, 129, ${alpha})`;
+          
+          for (let x = 0; x <= width; x += 40) {
+            const yOffset = 
+                Math.sin(x * 0.002 + time + i * 0.02) * (height * 0.3) +
+                Math.cos(x * 0.005 - time * 0.8 + i * 0.015) * (height * 0.2) +
+                Math.sin(x * 0.01 + time * 1.5) * 50;
+            const y = height / 2 + yOffset;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+        ctx.globalCompositeOperation = 'source-over'; 
+        time += speed;
+        requestAnimationFrame(drawSilk);
+      }
+      drawSilk();
+    })();
+
+    // ══════════════════════════════════════════════════════════════
+    //  状态管理与初始化
+    // ══════════════════════════════════════════════════════════════
+    function getUploadSequence() {
+      let seq = localStorage.getItem('userSequence');
+      if (!seq) {
+        let globalCount = parseInt(localStorage.getItem('globalUploadCount') || '0');
+        globalCount++;
+        localStorage.setItem('globalUploadCount', globalCount);
+        seq = String(globalCount).padStart(3, '0');
+        localStorage.setItem('userSequence', seq);
+      }
+      return seq;
+    }
+
+    let imageDataUrl = null;
+
+    window.onload = () => {
+      document.body.style.opacity = 1;
+      imageDataUrl = localStorage.getItem("generatedImage");
+      
+      if (!imageDataUrl) {
+        showToast("未发现可归档的痕迹，正在返回", "No trace found. Returning.");
+        setTimeout(() => { window.location.href = 'page-resonance.html'; }, 2000);
+        return;
+      }
+      document.getElementById('finalImage').src = imageDataUrl;
+    };
+
+    // ══════════════════════════════════════════════════════════════
+    //  行为逻辑
+    // ══════════════════════════════════════════════════════════════
+    const downloadBtn = document.getElementById('downloadBtn');
+    const printBtn = document.getElementById('printBtn');
+    const printModal = document.getElementById('printModal');
+    const modalCancel = document.getElementById('modalCancel');
+    const modalConfirm = document.getElementById('modalConfirm');
+
+    downloadBtn.addEventListener('click', () => {
+      if (!imageDataUrl) return;
+      const a = document.createElement('a');
+      a.href = imageDataUrl;
+      a.download = `Resonance_Inscribe_${Date.now()}.png`;
+      a.click();
+      showToast("图像已归档至本地", "Trace archived locally.");
+    });
+
+    printBtn.addEventListener('click', () => {
+      const currentSeq = getUploadSequence();
+      document.getElementById('modalText').textContent = `代号${currentSeq}归序者，请完成相纸使用的序值缴纳，以继续通行。`;
+      printModal.style.display = 'flex';
+      setTimeout(() => { printModal.classList.add('show'); }, 10);
+    });
+
+    modalCancel.addEventListener('click', () => {
+      printModal.classList.remove('show');
+      setTimeout(() => { printModal.style.display = 'none'; }, 400);
+    });
+
+    modalConfirm.addEventListener('click', () => {
+      printModal.classList.remove('show');
+      setTimeout(() => { 
+        printModal.style.display = 'none'; 
+        window.print(); 
+      }, 400);
+    });
+
+    function showToast(cn, en) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastCn').textContent = cn;
+      document.getElementById('toastEn').textContent = en;
+      toast.style.top = '40px';
+      setTimeout(() => { toast.style.top = '-100px'; }, 3000);
+    }
+  </script>
+</body>
+</html>

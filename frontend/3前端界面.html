@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Translating - 转译</title>
+  <style>
+    /* 全局视觉 Token [cite: 1, 7] */
+    :root {
+      --bg: #050505;
+      --text: #ffffff;
+      --muted: #666666;
+      --accent: rgba(255, 255, 255, 0.9);
+      --glass: rgba(255, 255, 255, 0.08);
+      --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: "PingFang SC", "Helvetica Neue", Helvetica, sans-serif;
+      overflow: hidden;
+      opacity: 0;
+      transition: opacity 1.5s var(--ease);
+    }
+
+    /* 顶层容器：安全边距 [cite: 1, 11] */
+    .app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 24px 32px 40px 32px; 
+    }
+
+    /* 背景：数字仪式粒子  */
+    #aura-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    .screen {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* 标题动效：轻微闪烁感  */
+    .title-en {
+      font-family: "Times New Roman", serif;
+      font-size: 18px;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 40px;
+      animation: pulseText 3s var(--ease) infinite;
+    }
+
+    /* 核心视觉：呼吸光晕球  */
+    .orb-container {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      margin-bottom: 60px;
+    }
+
+    .orb {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80px;
+      height: 80px;
+      background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 70%);
+      border-radius: 50%;
+      animation: orbBreathe 4s ease-in-out infinite;
+    }
+
+    .orb-core {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 2px;
+      height: 2px;
+      background: white;
+      box-shadow: 0 0 15px 2px white;
+      border-radius: 50%;
+    }
+
+    /* 文案排版 [cite: 1, 4] */
+    .status-group {
+      opacity: 0.8;
+    }
+    .body-cn {
+      font-size: 14px;
+      font-weight: 300;
+      letter-spacing: 3px;
+      margin-bottom: 6px;
+    }
+    .body-en {
+      font-family: "Times New Roman", serif;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* Toast 样式 [cite: 1, 5] */
+    .toast-wrap {
+      position: fixed;
+      top: -100px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      transition: top 0.6s var(--ease);
+      z-index: 1000;
+    }
+    .toast {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 12px 24px;
+      border-radius: 100px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: center;
+    }
+    .toast-cn { font-size: 13px; color: #fff; display: block; }
+    .toast-en { font-size: 10px; color: #aaa; display: block; }
+
+    /* 动画定义  */
+    @keyframes pulseText {
+      0%, 100% { opacity: 0.5; transform: scale(0.98); }
+      50% { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes orbBreathe {
+      0%, 100% { width: 80px; height: 80px; opacity: 0.3; }
+      50% { width: 180px; height: 180px; opacity: 0.6; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="toast-wrap" id="toast">
+    <div class="toast">
+      <span class="toast-cn">未检测到图像痕迹</span>
+      <span class="toast-en">No visual residue detected.</span>
+    </div>
+  </div>
+
+  <canvas id="aura-canvas"></canvas>
+
+  <div class="app">
+    <div class="screen">
+      <div class="title-en">Translating visual residue...</div>
+      
+      <div class="orb-container">
+        <div class="orb"></div>
+        <div class="orb" style="animation-delay: -2s;"></div>
+        <div class="orb-core"></div>
+      </div>
+
+      <div class="status-group">
+        <div class="body-cn">正在生成密语</div>
+        <div class="body-en">Cipher Weaving</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.onload = () => {
+      document.body.style.opacity = 1;
+      startTransition();
+    };
+
+    // 逻辑：检查数据并自动跳转 
+    function startTransition() {
+      const uploadedImage = localStorage.getItem("uploadedImage");
+      
+      if (!uploadedImage) {
+        showToast("检测不到前置数据，请返回重试", "Data missing. Returning to previous step.");
+        setTimeout(() => {
+          window.location.href = 'page-reflect.html';
+        }, 2500);
+        return;
+      }
+
+      // 模拟转译过程 3 秒 
+      setTimeout(() => {
+        localStorage.setItem("currentStep", "resonance");
+        document.body.style.opacity = 0;
+        
+        setTimeout(() => {
+          window.location.href = 'page-resonance.html';
+        }, 1200);
+      }, 3500);
+    }
+
+    // Toast 逻辑 [cite: 1, 5]
+    function showToast(cn, en) {
+      const toast = document.getElementById('toast');
+      toast.querySelector('.toast-cn').textContent = cn;
+      toast.querySelector('.toast-en').textContent = en;
+      toast.style.top = '40px';
+    }
+
+    // 绘制背景粒子扰动 
+    const canvas = document.getElementById('aura-canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, particles = [];
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    class ScanLine {
+      constructor() {
+        this.y = Math.random() * height;
+        this.speed = Math.random() * 0.5 + 0.2;
+        this.opacity = Math.random() * 0.2;
+      }
+      update() {
+        this.y += this.speed;
+        if (this.y > height) this.y = 0;
+      }
+      draw() {
+        ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity})`;
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, this.y);
+        ctx.lineTo(width, this.y);
+        ctx.stroke();
+      }
+    }
+
+    const lines = Array.from({ length: 5 }, () => new ScanLine());
+
+    function animate() {
+      ctx.clearRect(0, 0, width, height);
+      lines.forEach(line => {
+        line.update();
+        line.draw();
+      });
+      requestAnimationFrame(animate);
+    }
+    animate();
+  </script>
+</body>
+</html>

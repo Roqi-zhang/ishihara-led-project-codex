@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Resonance - 共鸣</title>
+  <style>
+    /* 全局 CSS 变量 (统一视觉 token) */
+    :root {
+      --bg: #050505;
+      --text: #ffffff;
+      --muted: #666666;
+      --accent: rgba(255, 255, 255, 0.9);
+      --glass: rgba(255, 255, 255, 0.08);
+      --line: rgba(255, 255, 255, 0.1);
+      --radius: 12px;
+      --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: "PingFang SC", "Helvetica Neue", Helvetica, sans-serif;
+      overflow-x: hidden;
+      opacity: 0;
+      transition: opacity 1.5s var(--ease);
+    }
+
+    /* 动态丝绸背景 */
+    #silk-bg {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* 顶层容器：安全边距 */
+    .app {
+      position: relative;
+      width: 100vw;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 24px 40px 24px; 
+      z-index: 1;
+    }
+
+    .screen {
+      width: 100%;
+      max-width: 500px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* 标题排版 */
+    .header {
+      margin-top: 10px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    .title-cn {
+      font-size: 20px;
+      font-weight: 300;
+      letter-spacing: 2px;
+      margin-bottom: 4px;
+    }
+    .title-en {
+      font-family: "Times New Roman", serif;
+      font-size: 14px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* 核心视觉：生成图像容器 (强制圆形) */
+    .output-wrap {
+      width: 100%;
+      max-width: 320px;
+      aspect-ratio: 1 / 1;
+      border-radius: 50%;
+      position: relative;
+      margin-bottom: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.4);
+      box-shadow: inset 0 0 40px rgba(255,255,255,0.02), 0 0 60px rgba(255,255,255,0.05);
+      opacity: 0; /* 初始隐藏，等待首次生成 */
+      transition: opacity 2s var(--ease);
+      animation: floatCanvas 6s ease-in-out infinite alternate;
+      flex-shrink: 0;
+    }
+
+    #outputCanvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      mix-blend-mode: screen;
+      transition: opacity 0.3s var(--ease);
+    }
+
+    /* ── 控制面板区域 (适配移动端艺术风格) ── */
+    .controls-panel {
+      width: 100%;
+      opacity: 0;
+      transition: opacity 1.5s var(--ease);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    /* 调色板模块 */
+    .section-title {
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      font-family: "Times New Roman", serif;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .section-title-cn { font-family: "PingFang SC", sans-serif; }
+
+    .palette-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .pal-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      cursor: pointer;
+      background: rgba(255,255,255,0.02);
+      transition: all 0.3s var(--ease);
+      position: relative;
+    }
+    .pal-card.active {
+      border-color: rgba(255,255,255,0.6);
+      background: rgba(255,255,255,0.08);
+      box-shadow: 0 0 16px rgba(255,255,255,0.05);
+    }
+    .pal-card-name { font-size: 12px; color: var(--accent); margin-bottom: 4px; }
+    .pal-card-desc { font-family: "Times New Roman", serif; font-size: 10px; color: var(--muted); margin-bottom: 8px; font-style: italic; }
+    .pal-dots { display: flex; gap: 4px; align-items: center; }
+    .pal-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .pal-sep { width: 6px; height: 1px; background: var(--line); flex-shrink: 0; }
+
+    /* 滑块参数模块 */
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .ctrl-row:last-child { margin-bottom: 0; }
+    
+    .ctrl-label { display: flex; flex-direction: column; gap: 2px; }
+    .label-cn { font-size: 13px; color: var(--accent); }
+    .label-en { font-family: "Times New Roman", serif; font-size: 10px; color: var(--muted); text-transform: uppercase; }
+    
+    .ctrl-right { display: flex; align-items: center; gap: 12px; }
+    .ctrl-val { font-family: 'Courier New', Courier, monospace; font-size: 12px; color: var(--text); min-width: 36px; text-align: right; }
+    
+    input[type=range] {
+      -webkit-appearance: none; width: 100px; height: 2px; border-radius: 2px;
+      background: var(--line); outline: none; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px;
+      border-radius: 50%; background: #fff; cursor: pointer;
+      box-shadow: 0 0 10px rgba(255,255,255,0.2);
+    }
+
+    /* 按钮排版 */
+    .footer {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      opacity: 0;
+      transition: opacity 1.5s var(--ease);
+      margin-top: auto;
+    }
+
+    .primary-btn {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--glass);
+      padding: 16px;
+      border-radius: 100px;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: all 0.4s var(--ease);
+    }
+
+    .primary-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .btn-cn { font-size: 14px; letter-spacing: 2px; }
+    .btn-en { font-family: "Times New Roman", serif; font-size: 10px; color: var(--muted); text-transform: uppercase; }
+
+    /* Toast 样式 */
+    .toast-wrap {
+      position: fixed;
+      top: -100px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      transition: top 0.6s var(--ease);
+      z-index: 1000;
+    }
+    .toast {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 12px 24px;
+      border-radius: 100px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: center;
+    }
+    .toast-cn { font-size: 13px; color: #fff; display: block; margin-bottom: 2px; }
+    .toast-en { font-size: 10px; color: #aaa; display: block; }
+
+    /* 动画 */
+    @keyframes floatCanvas {
+      0% { transform: translateY(0px); }
+      100% { transform: translateY(-10px); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="toast-wrap" id="toast">
+    <div class="toast">
+      <span class="toast-cn" id="toastCn"></span>
+      <span class="toast-en" id="toastEn"></span>
+    </div>
+  </div>
+
+  <canvas id="silk-bg"></canvas>
+
+  <div class="app">
+    <div class="screen">
+      <div class="header">
+        <h1 class="title-cn">Resonance 共鸣</h1>
+        <div class="title-en">Resonance</div>
+      </div>
+
+      <div class="output-wrap" id="outputWrap">
+        <canvas id="outputCanvas"></canvas>
+      </div>
+
+      <div class="controls-panel" id="controlsPanel">
+        
+        <div class="palette-section">
+          <div class="section-title">
+            <span class="section-title-cn">色彩方案</span>
+            <span>Color Scheme</span>
+          </div>
+          <div class="palette-grid" id="paletteGrid"></div>
+        </div>
+
+        <div class="params-section">
+          <div class="section-title">
+            <span class="section-title-cn">形态参数</span>
+            <span>Morphology</span>
+          </div>
+          
+          <div class="ctrl-row">
+            <div class="ctrl-label">
+              <span class="label-cn">粒子密度</span>
+              <span class="label-en">Dot Density</span>
+            </div>
+            <div class="ctrl-right">
+              <input type="range" id="slDensity" min="30" max="90" value="64" step="2"/>
+              <span class="ctrl-val" id="vDensity">64</span>
+            </div>
+          </div>
+
+          <div class="ctrl-row">
+            <div class="ctrl-label">
+              <span class="label-cn">随机扰动</span>
+              <span class="label-en">Random Variance</span>
+            </div>
+            <div class="ctrl-right">
+              <input type="range" id="slVary" min="10" max="80" value="45" step="5"/>
+              <span class="ctrl-val" id="vVary">45%</span>
+            </div>
+          </div>
+
+          <div class="ctrl-row">
+            <div class="ctrl-label">
+              <span class="label-cn">映射精度</span>
+              <span class="label-en">Resolution</span>
+            </div>
+            <div class="ctrl-right">
+              <input type="range" id="slRes" min="512" max="1024" value="800" step="128"/>
+              <span class="ctrl-val" id="vRes">800</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="footer" id="footerAction">
+        <button class="primary-btn" id="convergeBtn">
+          <span class="btn-cn">汇聚</span>
+          <span class="btn-en">Converge</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ══════════════════════════════════════════════════════════════
+    //  复用逻辑：丝绸背景 (Silk Background)
+    // ══════════════════════════════════════════════════════════════
+    (function initSilkBackground() {
+      const canvas = document.getElementById('silk-bg');
+      const ctx = canvas.getContext('2d');
+      let width, height;
+
+      function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      let time = 0;
+      const speed = 0.003; 
+      const lines = 80; // 移动端稍微减少线条优化性能
+
+      function drawSilk() {
+        ctx.fillStyle = '#050505'; 
+        ctx.fillRect(0, 0, width, height);
+        ctx.lineWidth = 1;
+        ctx.globalCompositeOperation = 'lighter'; 
+
+        for (let i = 0; i < lines; i++) {
+          ctx.beginPath();
+          const alpha = 0.02 + (i / lines) * 0.04;
+          ctx.strokeStyle = `rgba(123, 116, 129, ${alpha})`;
+          
+          for (let x = 0; x <= width; x += 40) {
+            const yOffset = 
+                Math.sin(x * 0.002 + time + i * 0.02) * (height * 0.3) +
+                Math.cos(x * 0.005 - time * 0.8 + i * 0.015) * (height * 0.2) +
+                Math.sin(x * 0.01 + time * 1.5) * 50;
+            const y = height / 2 + yOffset;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+        ctx.globalCompositeOperation = 'source-over'; 
+        time += speed;
+        requestAnimationFrame(drawSilk);
+      }
+      drawSilk();
+    })();
+
+    // ══════════════════════════════════════════════════════════════
+    //  核心状态与参数配置
+    // ══════════════════════════════════════════════════════════════
+    let baseImage = null;
+    let isFirstRender = true;
+    let renderTimer = null;
+
+    const SCHEMES = [
+      {
+        id: 'auto', name: '✨ 智能生成', desc: 'Auto complementary',
+        fig: [[232,160,74], [92,170,110], [100,200,255], [255,100,100]],
+        bg:  [[100,100,100], [80,80,80], [60,60,60], [120,120,120]]
+      },
+      {
+        id: 'orange-green', name: '橙 × 绿', desc: 'Classic Ishihara',
+        fig: [[200,102, 34],[228,134, 58],[240,148, 68],[212,110, 40]],
+        bg:  [[ 74,140, 58],[ 98,168, 80],[108,178, 88],[ 92,160, 74]]
+      },
+      {
+        id: 'red-green', name: '红 × 黄', desc: 'Red deficiency',
+        fig: [[196, 54, 42],[220, 78, 58],[228, 88, 66],[214, 72, 54]],
+        bg:  [[148,172, 52],[172,196, 74],[180,204, 84],[166,190, 68]]
+      },
+      {
+        id: 'blue-yellow', name: '蓝 × 黄', desc: 'Tritanopia contrast',
+        fig: [[ 52, 96,188],[ 74,120,210],[ 82,130,218],[ 68,114,204]],
+        bg:  [[220,172, 40],[240,196, 62],[246,204, 72],[236,190, 56]]
+      }
+    ];
+
+    let currentScheme = SCHEMES[0];
+
+    // 初始化 UI 组件
+    (function initUI() {
+      // 构建调色板
+      const grid = document.getElementById('paletteGrid');
+      SCHEMES.forEach((s, i) => {
+        const card = document.createElement('div');
+        card.className = 'pal-card' + (i === 0 ? ' active' : '');
+        const figDots = s.fig.slice(0,2).map(c => `<div class="pal-dot" style="background:rgb(${c[0]},${c[1]},${c[2]})"></div>`).join('');
+        const bgDots = s.bg.slice(0,2).map(c => `<div class="pal-dot" style="background:rgb(${c[0]},${c[1]},${c[2]})"></div>`).join('');
+        card.innerHTML = `
+          <div class="pal-card-name">${s.name}</div>
+          <div class="pal-card-desc">${s.desc}</div>
+          <div class="pal-dots">${figDots}<div class="pal-sep"></div>${bgDots}</div>`;
+        card.addEventListener('click', () => {
+          currentScheme = s;
+          document.querySelectorAll('.pal-card').forEach(c => c.classList.remove('active'));
+          card.classList.add('active');
+          triggerReRender();
+        });
+        grid.appendChild(card);
+      });
+
+      // 绑定滑块
+      function bindSl(id, vid, fmt) {
+        const sl = document.getElementById(id), vl = document.getElementById(vid);
+        sl.addEventListener('input', () => { 
+          vl.textContent = fmt(sl.value); 
+          triggerReRender(); // 滑动时触发防抖重绘
+        });
+      }
+      bindSl('slDensity', 'vDensity', v => v);
+      bindSl('slVary',    'vVary',    v => v + '%');
+      bindSl('slRes',     'vRes',     v => v);
+    })();
+
+    // 触发重新渲染 (带防抖)
+    function triggerReRender() {
+      if (!baseImage) return;
+      const oc = document.getElementById('outputCanvas');
+      oc.style.opacity = 0.5; // 给用户正在计算的反馈
+      clearTimeout(renderTimer);
+      renderTimer = setTimeout(() => {
+        executeResonance(baseImage);
+        oc.style.opacity = 1;
+      }, 150);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  复用逻辑：颜色空间与算法工具
+    // ══════════════════════════════════════════════════════════════
+    function rgbToHsl(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      let max = Math.max(r, g, b), min = Math.min(r, g, b);
+      let h, s, l = (max + min) / 2;
+      if (max === min) h = s = 0;
+      else {
+        let d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+      }
+      return [h, s, l];
+    }
+
+    function hslToRgb(h, s, l) {
+      let r, g, b;
+      if (s === 0) r = g = b = l;
+      else {
+        const hue2rgb = (p, q, t) => {
+          if (t < 0) t += 1; if (t > 1) t -= 1;
+          if (t < 1/6) return p + (q - p) * 6 * t;
+          if (t < 1/2) return q;
+          if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+          return p;
+        };
+        let q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        let p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1/3); g = hue2rgb(p, q, h); b = hue2rgb(p, q, h - 1/3);
+      }
+      return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+    }
+
+    function h01(n) {
+      n = ((n >> 16) ^ n) * 0x45d9f3b; n = ((n >> 16) ^ n) * 0x45d9f3b; n = (n >> 16) ^ n;
+      return (n >>> 0) / 0xFFFFFFFF;
+    }
+
+    function sampleAvg(d, x, y, rad, sz) {
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let dy = -rad; dy <= rad; dy++) {
+        for (let dx = -rad; dx <= rad; dx++) {
+          const nx = Math.min(sz - 1, Math.max(0, x + dx));
+          const ny = Math.min(sz - 1, Math.max(0, y + dy));
+          const i = (ny * sz + nx) * 4;
+          r += d.data[i]; g += d.data[i + 1]; b += d.data[i + 2]; n++;
+        }
+      }
+      return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
+    }
+
+    function build74Mask(size) {
+      const MS = 800;
+      const mc = document.createElement('canvas'); mc.width = mc.height = MS;
+      const ctx = mc.getContext('2d');
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, MS, MS);
+      ctx.fillStyle = '#fff';
+      const fontStack = '"Arial Black", "Impact", "Helvetica Neue", Arial, sans-serif';
+      const fontSize = Math.round(MS * 0.72);
+      ctx.font = `900 ${fontSize}px ${fontStack}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('74', MS / 2, MS / 2 + fontSize * 0.04);
+      const mData = ctx.getImageData(0, 0, MS, MS);
+      const outMask = new Uint8Array(size * size);
+      const scale = MS / size;
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          let sum = 0, cnt = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const mx = Math.min(MS-1, Math.max(0, Math.round(x*scale+dx)));
+              const my = Math.min(MS-1, Math.max(0, Math.round(y*scale+dy)));
+              sum += mData.data[(my*MS+mx)*4]; cnt++;
+            }
+          }
+          outMask[y*size+x] = Math.round(sum/cnt);
+        }
+      }
+      return outMask;
+    }
+
+    function buildDotGrid(gridN, size, varyPct, seed) {
+      const dots = [];
+      const cell = size / gridN;
+      const baseR = cell * 0.52;
+      const center = size / 2;
+      const maxRadius = size / 2 - cell; // 强制圆形边界
+
+      for (let row = 0; row < Math.ceil(gridN * 1.22); row++) {
+        for (let col = 0; col < gridN; col++) {
+          const ox = (row % 2 === 0) ? 0 : cell * 0.5;
+          const jx = (h01(row * gridN + col + seed * 17 + 3) - 0.5) * cell * (varyPct * 1.3);
+          const jy = (h01(row * gridN + col + seed * 17 + 77) - 0.5) * cell * (varyPct * 1.3);
+
+          const cx = col * cell + cell * 0.5 + ox + jx;
+          const cy = row * cell * 0.866 + cell * 0.5 + jy;
+          
+          if (Math.hypot(cx - center, cy - center) > maxRadius) continue;
+
+          const noise = h01(row * gridN + col + seed * 17 + 13);
+          const vary = 1 - varyPct * noise * 1.8; 
+          const r = Math.max(1.5, baseR * vary);
+
+          if (noise < varyPct * 0.35) continue; 
+          dots.push({ cx, cy, r, color: [128, 128, 128] });
+        }
+      }
+      return dots;
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  生命周期与核心转译执行
+    // ══════════════════════════════════════════════════════════════
+    window.onload = () => {
+      document.body.style.opacity = 1;
+      const imgData = localStorage.getItem("uploadedImage");
+      
+      if (!imgData) {
+        showToast("未检测到前置图像数据，请返回重试", "Missing image data. Please go back.");
+        setTimeout(() => { window.location.href = 'page-reflect.html'; }, 2000);
+        return;
+      }
+
+      baseImage = new Image();
+      baseImage.onload = () => {
+        setTimeout(() => executeResonance(baseImage), 500);
+      };
+      baseImage.src = imgData;
+    };
+
+    function executeResonance(image) {
+      // 动态读取 UI 面板参数
+      const gridN = parseInt(document.getElementById('slDensity').value);
+      const varyPct = parseInt(document.getElementById('slVary').value) / 100;
+      const outSize = parseInt(document.getElementById('slRes').value);
+
+      const srcC = document.createElement('canvas');
+      srcC.width = srcC.height = 900;
+      const sCtx = srcC.getContext('2d');
+      const side = Math.min(image.width, image.height);
+      sCtx.drawImage(image, (image.width - side) / 2, (image.height - side) / 2, side, side, 0, 0, 900, 900);
+      const srcData = sCtx.getImageData(0, 0, 900, 900);
+
+      const mask74 = build74Mask(outSize);
+      // 使用固定的 seed 保证调整时位置尽量稳定，不产生剧烈跳变
+      const dots = buildDotGrid(gridN, outSize, varyPct, 1);
+
+      for (let i = 0; i < dots.length; i++) {
+        const dot = dots[i];
+        const sx = Math.round((dot.cx / outSize) * 900);
+        const sy = Math.round((dot.cy / outSize) * 900);
+        const sampled = sampleAvg(srcData, sx, sy, 3, 900);
+
+        const mx = Math.min(outSize - 1, Math.max(0, Math.round(dot.cx)));
+        const my = Math.min(outSize - 1, Math.max(0, Math.round(dot.cy)));
+        const maskVal = mask74[my * outSize + mx];
+        const isFig = maskVal > 80;
+        dot.isFig = isFig;
+
+        let sHsl = rgbToHsl(sampled[0], sampled[1], sampled[2]);
+
+        if (isFig) {
+          if (currentScheme.id === 'auto') {
+            if (sHsl[1] < 0.1) { sHsl[0] = 0.08; sHsl[1] = 0.85; } 
+            else { sHsl[0] = (sHsl[0] + 0.5) % 1; sHsl[1] = Math.min(1, sHsl[1] * 1.5); }
+            sHsl[2] = Math.max(0.45, sHsl[2]); 
+            dot.color = hslToRgb(sHsl[0], sHsl[1], sHsl[2]);
+          } else {
+            const tgtRgb = currentScheme.fig[Math.floor(h01(i * 7 + 31) * currentScheme.fig.length)];
+            const tHsl = rgbToHsl(tgtRgb[0], tgtRgb[1], tgtRgb[2]);
+            let finalL = Math.max(0.4, sHsl[2] * 0.4 + tHsl[2] * 0.6);
+            dot.color = hslToRgb(tHsl[0], tHsl[1], finalL);
+          }
+        } else {
+          sHsl[1] *= 0.7; sHsl[2] *= 0.8; 
+          dot.color = hslToRgb(sHsl[0], sHsl[1], sHsl[2]);
+        }
+      }
+
+      const oc = document.getElementById('outputCanvas');
+      oc.width = oc.height = outSize;
+      const ctx = oc.getContext('2d');
+      ctx.fillStyle = '#0a0a0a'; 
+      ctx.fillRect(0, 0, outSize, outSize);
+      
+      for (const dot of dots) {
+        ctx.beginPath();
+        ctx.arc(dot.cx, dot.cy, Math.max(0.5, dot.r * 0.9), 0, Math.PI * 2);
+        if (dot.isFig) {
+          ctx.shadowBlur = dot.r * 1.2;
+          ctx.shadowColor = `rgb(${Math.min(255, dot.color[0]*1.2)},${Math.min(255, dot.color[1]*1.2)},${Math.min(255, dot.color[2]*1.2)})`;
+        } else { ctx.shadowBlur = 0; }
+        ctx.fillStyle = `rgb(${dot.color[0]},${dot.color[1]},${dot.color[2]})`;
+        ctx.fill();
+      }
+
+      if (isFirstRender) {
+        document.getElementById('outputWrap').style.opacity = 1;
+        document.getElementById('controlsPanel').style.opacity = 1;
+        document.getElementById('footerAction').style.opacity = 1;
+        isFirstRender = false;
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  汇聚与跳转逻辑
+    // ══════════════════════════════════════════════════════════════
+    const convergeBtn = document.getElementById('convergeBtn');
+    convergeBtn.addEventListener('click', () => {
+      showToast("已汇聚，请留步观看", "All has converged. Stay to witness.");
+      
+      try {
+        const oc = document.getElementById('outputCanvas');
+        localStorage.setItem("generatedImage", oc.toDataURL('image/png'));
+        localStorage.setItem("currentStep", "message");
+        
+        setTimeout(() => {
+          document.body.style.opacity = 0;
+          setTimeout(() => { window.location.href = 'page-message.html'; }, 1200);
+        }, 1500);
+
+      } catch (e) {
+        console.error("Storage error:", e);
+        showToast("存储空间不足，无法保存图像", "Storage limit reached.");
+      }
+    });
+
+    function showToast(cn, en) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastCn').textContent = cn;
+      document.getElementById('toastEn').textContent = en;
+      toast.style.top = '40px';
+      setTimeout(() => { toast.style.top = '-100px'; }, 3000);
+    }
+  </script>
+</body>
+</html>

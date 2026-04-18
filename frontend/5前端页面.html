@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Message - 留言</title>
+  <style>
+    /* 全局 CSS 变量 (统一视觉 token) */
+    :root {
+      --bg: #050505;
+      --text: #ffffff;
+      --muted: #666666;
+      --accent: rgba(255, 255, 255, 0.9);
+      --glass: rgba(255, 255, 255, 0.08);
+      --line: rgba(255, 255, 255, 0.1);
+      --radius: 12px;
+      --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: "PingFang SC", "Helvetica Neue", Helvetica, sans-serif;
+      overflow-x: hidden;
+      opacity: 0;
+      transition: opacity 1.5s var(--ease);
+    }
+
+    /* 漂浮尘埃背景 (象征时间与痕迹) */
+    #dust-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* 顶层容器：安全边距 */
+    .app {
+      position: relative;
+      width: 100vw;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 24px 32px 40px 32px; 
+      z-index: 1;
+    }
+
+    .screen {
+      width: 100%;
+      max-width: 500px;
+      margin: 0 auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 标题排版 */
+    .header {
+      margin-top: 40px;
+      margin-bottom: 40px;
+      text-align: center;
+    }
+    
+    .title-en {
+      font-family: "Times New Roman", serif;
+      font-size: 22px;
+      color: var(--accent);
+      letter-spacing: 1px;
+      font-style: italic;
+    }
+
+    /* 说明文案 */
+    .instruction {
+      margin-bottom: 32px;
+      text-align: center;
+    }
+    .body-cn {
+      font-size: 15px;
+      font-weight: 300;
+      line-height: 1.6;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .body-en {
+      font-family: "Times New Roman", serif;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* 输入框区域 */
+    .input-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 40px;
+      position: relative;
+    }
+
+    textarea {
+      width: 100%;
+      flex: 1;
+      min-height: 240px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 24px;
+      padding-bottom: 40px; /* 为字数统计留出空间 */
+      color: var(--text);
+      font-family: "PingFang SC", "Helvetica Neue", Helvetica, sans-serif;
+      font-size: 14px;
+      line-height: 1.8;
+      resize: none;
+      transition: all 0.4s var(--ease);
+      font-weight: 300;
+    }
+
+    textarea::placeholder {
+      color: rgba(255, 255, 255, 0.15);
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: rgba(255, 255, 255, 0.4);
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: 0 0 30px rgba(255, 255, 255, 0.03);
+    }
+
+    /* 字数统计 */
+    .char-count {
+      position: absolute;
+      bottom: 16px;
+      right: 24px;
+      font-family: "Times New Roman", serif;
+      font-size: 12px;
+      color: var(--muted);
+      pointer-events: none;
+      transition: color 0.3s ease;
+    }
+    .char-count.limit-reached {
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    /* 按钮排版 */
+    .footer {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: auto;
+    }
+
+    .primary-btn {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--glass);
+      padding: 16px;
+      border-radius: 100px;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: all 0.4s var(--ease);
+    }
+
+    .primary-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .btn-cn { font-size: 14px; letter-spacing: 2px; }
+    .btn-en { font-family: "Times New Roman", serif; font-size: 10px; color: var(--muted); text-transform: uppercase; }
+
+    /* Toast 样式 */
+    .toast-wrap {
+      position: fixed;
+      top: -100px;
+      left: 0;
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      transition: top 0.6s var(--ease);
+      z-index: 1000;
+    }
+    .toast {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 12px 24px;
+      border-radius: 100px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: center;
+    }
+    .toast-cn { font-size: 13px; color: #fff; display: block; margin-bottom: 2px; }
+    .toast-en { font-size: 10px; color: #aaa; display: block; }
+  </style>
+</head>
+<body>
+
+  <div class="toast-wrap" id="toast">
+    <div class="toast">
+      <span class="toast-cn" id="toastCn"></span>
+      <span class="toast-en" id="toastEn"></span>
+    </div>
+  </div>
+
+  <canvas id="dust-canvas"></canvas>
+
+  <div class="app">
+    <div class="screen">
+      
+      <div class="header">
+        <h1 class="title-en">Carve your timeless trail.</h1>
+      </div>
+
+      <div class="instruction">
+        <div class="body-cn">你想对自己、对这个时代的我们说些什么？</div>
+        <div class="body-en">What do you want to say to yourself, and to us in this era?</div>
+      </div>
+
+      <div class="input-area">
+        <textarea id="messageInput" maxlength="200" placeholder="Type your message..."></textarea>
+        <div class="char-count" id="charCountWrap"><span id="charCurrent">0</span> / 200</div>
+      </div>
+
+      <div class="footer">
+        <button class="primary-btn" id="codifyBtn">
+          <span class="btn-cn">归档</span>
+          <span class="btn-en">Codify</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ══════════════════════════════════════════════════════════════
+    //  初始化检查逻辑
+    // ══════════════════════════════════════════════════════════════
+    window.onload = () => {
+      document.body.style.opacity = 1;
+      
+      // 异常处理：检查前序图像数据是否存在
+      const generatedImage = localStorage.getItem("generatedImage");
+      if (!generatedImage) {
+        showToast("缺失前序图像数据，正在返回", "Missing image data. Returning.");
+        setTimeout(() => {
+          window.location.href = 'page-resonance.html';
+        }, 2000);
+      }
+    };
+
+    // ══════════════════════════════════════════════════════════════
+    //  交互逻辑：字数统计与提交
+    // ══════════════════════════════════════════════════════════════
+    const messageInput = document.getElementById('messageInput');
+    const charCurrent = document.getElementById('charCurrent');
+    const charCountWrap = document.getElementById('charCountWrap');
+    const codifyBtn = document.getElementById('codifyBtn');
+
+    messageInput.addEventListener('input', () => {
+      const len = messageInput.value.length;
+      charCurrent.textContent = len;
+      if (len >= 200) {
+        charCountWrap.classList.add('limit-reached');
+      } else {
+        charCountWrap.classList.remove('limit-reached');
+      }
+    });
+
+    codifyBtn.addEventListener('click', () => {
+      // 保存留言痕迹
+      const msg = messageInput.value.trim();
+      localStorage.setItem("userMessage", msg);
+      localStorage.setItem("currentStep", "inscribe");
+      
+      // 优雅退场动画
+      document.body.style.opacity = 0;
+      setTimeout(() => {
+        window.location.href = 'page-inscribe.html';
+      }, 1200);
+    });
+
+    // Toast 提示工具
+    function showToast(cn, en) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastCn').textContent = cn;
+      document.getElementById('toastEn').textContent = en;
+      toast.style.top = '40px';
+      setTimeout(() => { toast.style.top = '-100px'; }, 3000);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  环境渲染：缓慢尘埃粒子 (微动效)
+    // ══════════════════════════════════════════════════════════════
+    const canvas = document.getElementById('dust-canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, dusts = [];
+
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    class Dust {
+      constructor() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.size = Math.random() * 1.2 + 0.3;
+        this.speedY = -(Math.random() * 0.2 + 0.1); 
+        this.speedX = (Math.random() - 0.5) * 0.1;
+        this.opacity = Math.random() * 0.3 + 0.05;
+      }
+      update() {
+        this.y += this.speedY;
+        this.x += this.speedX;
+        if (this.y < 0) {
+          this.y = height;
+          this.x = Math.random() * width;
+        }
+      }
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+        ctx.fill();
+      }
+    }
+
+    for (let i = 0; i < 40; i++) dusts.push(new Dust());
+
+    function animateDust() {
+      ctx.clearRect(0, 0, width, height);
+      dusts.forEach(dust => {
+        dust.update();
+        dust.draw();
+      });
+      requestAnimationFrame(animateDust);
+    }
+    animateDust();
+  </script>
+</body>
+</html>

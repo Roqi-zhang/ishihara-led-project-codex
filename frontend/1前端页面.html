@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Reminders - Opening</title>
+  <style>
+    /* 全局 CSS 变量 (统一视觉 token) */
+    :root {
+      --bg: #050505;
+      --text: #ffffff;
+      --muted: #666666;
+      --glass: rgba(255, 255, 255, 0.08);
+      --accent: rgba(255, 255, 255, 0.9);
+      --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: "PingFang SC", "Helvetica Neue", Helvetica, "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      overflow: hidden; 
+      opacity: 0;
+      transition: opacity 1.5s var(--ease);
+    }
+
+    /* 交互式粒子背景 */
+    #particle-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* 顶层容器：应用安全边距 */
+    .app {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      /* 调整内容对齐：底部对齐，以符合任务书“中央偏下构图”的要求 */
+      justify-content: flex-end;
+      /* 页面安全边距调整 */
+      padding-top: 24px;   /* 顶部安全边距 */
+      padding-bottom: 40px; /* 底部安全边距 */
+      padding-left: 32px;
+      padding-right: 32px;
+    }
+
+    .screen {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    /* 标题排版：Reminders 放大 5px (14px -> 19px) */
+    .title-en {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 19px; /* 已调整 */
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 60px;
+      opacity: 0;
+      animation: fadeInUp 2s var(--ease) 0.5s forwards;
+    }
+
+    /* 正文排版 */
+    .content-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+      margin-bottom: 60px;
+      width: 100%;
+    }
+
+    .text-group {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    .body-cn {
+      font-size: 15px;
+      font-weight: 300;
+      line-height: 1.6;
+      color: var(--accent);
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .body-en {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* 按钮排版 */
+    .primary-btn {
+      background: transparent;
+      border: 1px solid var(--glass);
+      padding: 16px 48px;
+      border-radius: 100px;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      opacity: 0;
+      transition: all 0.6s var(--ease);
+      animation: fadeInUp 2s var(--ease) 6s forwards, breathingGlow 4s ease-in-out infinite alternate 8s;
+      margin-bottom: 20px; /* 内部微调，确保不紧贴底部 padding */
+    }
+
+    .primary-btn:hover {
+      border-color: rgba(255, 255, 255, 0.3);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .btn-cn {
+      font-size: 14px;
+      letter-spacing: 2px;
+    }
+
+    .btn-en {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 10px;
+      letter-spacing: 1px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    /* 动画定义 */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes breathingGlow {
+      0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+      100% { box-shadow: 0 0 20px 0 rgba(255, 255, 255, 0.08); }
+    }
+
+    .text-group:nth-child(1) { animation: fadeInUp 2s var(--ease) 1.5s forwards; }
+    .text-group:nth-child(2) { animation: fadeInUp 2s var(--ease) 2.5s forwards; }
+    .text-group:nth-child(3) { animation: fadeInUp 2s var(--ease) 3.5s forwards; }
+    .text-group:nth-child(4) { animation: fadeInUp 2s var(--ease) 4.0s forwards; }
+    .text-group:nth-child(5) { animation: fadeInUp 2s var(--ease) 4.5s forwards; }
+    .text-group:nth-child(6) { animation: fadeInUp 2s var(--ease) 5.0s forwards; }
+  </style>
+</head>
+<body>
+
+  <canvas id="particle-canvas"></canvas>
+
+  <div class="app">
+    <div class="screen">
+      <div class="title-en">Reminders</div>
+
+      <div class="content-wrapper">
+        <div class="text-group">
+          <div class="body-cn">我们正在进入一个由人工智能和算法深度参与的时代</div>
+          <div class="body-en">We are stepping into an era deeply woven by artificial intelligence and algorithms.</div>
+        </div>
+        
+        <div class="text-group">
+          <div class="body-cn">越来越多原本属于“人的能力”正在被机器替代</div>
+          <div class="body-en">More and more abilities once unique to humanity are being usurped by machines.</div>
+        </div>
+
+        <div class="text-group">
+          <div class="body-cn">我是谁？</div>
+          <div class="body-en">Who am I?</div>
+        </div>
+
+        <div class="text-group">
+          <div class="body-cn">我有什么价值？</div>
+          <div class="body-en">What defines my worth?</div>
+        </div>
+
+        <div class="text-group">
+          <div class="body-cn">人类与机器的区别是什么？</div>
+          <div class="body-en">What distinguishes humans from machines?</div>
+        </div>
+
+        <div class="text-group">
+          <div class="body-cn">我们如何反抗算法对我们的“侵犯”？</div>
+          <div class="body-en">How shall we resist the quiet intrusion of algorithms into our lives?</div>
+        </div>
+      </div>
+
+      <button class="primary-btn" id="enterBtn">
+        <span class="btn-cn">进入</span>
+        <span class="btn-en">Enter</span>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    window.onload = () => { document.body.style.opacity = 1; };
+
+    const enterBtn = document.getElementById('enterBtn');
+    enterBtn.addEventListener('click', () => {
+      localStorage.setItem("currentStep", "reflect");
+      document.body.style.opacity = 0;
+      setTimeout(() => {
+        window.location.href = 'page-reflect.html';
+      }, 1500);
+    });
+
+    // 粒子动效逻辑
+    const canvas = document.getElementById('particle-canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, particles = [];
+    let pointer = { x: -1000, y: -1000 };
+
+    function resize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+    }
+    
+    window.addEventListener('resize', resize);
+    resize();
+
+    window.addEventListener('mousemove', (e) => { pointer.x = e.clientX; pointer.y = e.clientY; });
+    window.addEventListener('touchmove', (e) => { pointer.x = e.touches[0].clientX; pointer.y = e.touches[0].clientY; });
+
+    class Particle {
+      constructor() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.size = Math.random() * 1.5 + 0.5;
+        this.speedX = (Math.random() - 0.5) * 0.3;
+        this.speedY = (Math.random() - 0.5) * 0.3;
+        this.opacity = Math.random() * 0.5 + 0.1;
+      }
+      update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        if (this.x < 0 || this.x > width) this.speedX *= -1;
+        if (this.y < 0 || this.y > height) this.speedY *= -1;
+        let dx = pointer.x - this.x;
+        let dy = pointer.y - this.y;
+        let distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < 100) {
+          this.x -= dx * 0.01;
+          this.y -= dy * 0.01;
+        }
+      }
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+        ctx.fill();
+      }
+    }
+
+    const particleCount = Math.min(window.innerWidth / 10, 80);
+    for (let i = 0; i < particleCount; i++) { particles.push(new Particle()); }
+
+    function animateParticles() {
+      ctx.clearRect(0, 0, width, height);
+      for (let i = 0; i < particles.length; i++) {
+        particles[i].update();
+        particles[i].draw();
+      }
+      requestAnimationFrame(animateParticles);
+    }
+    animateParticles();
+  </script>
+</body>
+</html>
