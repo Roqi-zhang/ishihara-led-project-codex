@@ -361,10 +361,6 @@
         return savedBase.replace(/\/+$/, "");
       }
 
-      if (window.location && window.location.origin && window.location.origin !== "null") {
-        return window.location.origin.replace(/\/+$/, "");
-      }
-
       return "http://127.0.0.1:5000";
     }
 

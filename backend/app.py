@@ -1,6 +1,7 @@
 import os
 import base64
 import uuid
+import traceback
 from datetime import datetime, timezone
 
 import httpx
@@ -35,6 +36,11 @@ DISPLAY_SECONDS = 5
 
 ORIGINAL_BUCKET = "original-images"
 GENERATED_BUCKET = "generated-images"
+
+
+@app.before_request
+def log_incoming_request():
+    print("INCOMING REQUEST:", request.method, request.path, flush=True)
 
 
 # =========================
@@ -96,13 +102,33 @@ def upload_base64_image_to_storage(data_url: str, bucket: str, filename: str):
     path = filename
 
     # 这里已经修正：去掉 upsert，避免 bool 类型 header 报错
-    supabase.storage.from_(bucket).upload(
+    upload_result = supabase.storage.from_(bucket).upload(
         path,
         binary,
         {"content-type": "image/png"}
     )
+    print(
+        "[storage.upload]",
+        {
+            "timestamp": now_iso(),
+            "bucket": bucket,
+            "path": path,
+            "raw_result": repr(upload_result),
+        },
+        flush=True,
+    )
 
     public_url_resp = supabase.storage.from_(bucket).get_public_url(path)
+    print(
+        "[storage.public_url]",
+        {
+            "timestamp": now_iso(),
+            "bucket": bucket,
+            "path": path,
+            "raw_result": repr(public_url_resp),
+        },
+        flush=True,
+    )
 
     if isinstance(public_url_resp, dict):
         public_url = public_url_resp.get("publicUrl") or public_url_resp.get("public_url")
@@ -125,6 +151,11 @@ def display_page():
     return send_from_directory(os.path.dirname(__file__), "display.html")
 
 
+@app.get("/route-test-123")
+def route_test():
+    return "route ok"
+
+
 # =========================
 # 接收前端生成好的图谱并入库、入队
 # =========================
@@ -141,6 +172,17 @@ def upload_generated():
     """
     try:
         data = request.get_json(silent=True) or {}
+        print(
+            "[upload_generated] request_received",
+            {
+                "timestamp": now_iso(),
+                "has_imageBase64": bool(data.get("imageBase64")),
+                "has_originalImageBase64": bool(data.get("originalImageBase64")),
+                "has_symbol": bool(data.get("symbol")),
+                "has_message": bool(data.get("message")),
+            },
+            flush=True,
+        )
 
         image_base64 = data.get("imageBase64")
         symbol = data.get("symbol", "")
@@ -187,12 +229,26 @@ def upload_generated():
             "payment_status": "unpaid",
             "created_at": now_iso()
         }
+        print(
+            "[upload_generated] submissions_payload",
+            submission_payload,
+            flush=True,
+        )
 
         submission_insert = (
             supabase
             .table("submissions")
             .insert(submission_payload)
             .execute()
+        )
+        print(
+            "[upload_generated] submissions_insert_result",
+            {
+                "raw_result": repr(submission_insert),
+                "data": submission_insert.data,
+                "count": getattr(submission_insert, "count", None),
+            },
+            flush=True,
         )
 
         submission_rows = submission_insert.data or []
@@ -211,12 +267,26 @@ def upload_generated():
             "created_at": now_iso(),
             "shown_at": None
         }
+        print(
+            "[upload_generated] display_queue_payload",
+            queue_payload,
+            flush=True,
+        )
 
         queue_insert = (
             supabase
             .table("display_queue")
             .insert(queue_payload)
             .execute()
+        )
+        print(
+            "[upload_generated] display_queue_insert_result",
+            {
+                "raw_result": repr(queue_insert),
+                "data": queue_insert.data,
+                "count": getattr(queue_insert, "count", None),
+            },
+            flush=True,
         )
 
         queue_rows = queue_insert.data or []
@@ -236,7 +306,7 @@ def upload_generated():
 
         queue_length = active_queue.count or 0
 
-        return jsonify({
+        response_payload = {
             "ok": True,
             "submission": submission_rows[0],
             "item": {
@@ -246,9 +316,17 @@ def upload_generated():
                 "status": queue_item["status"]
             },
             "queue_length": queue_length
-        })
+        }
+        print(
+            "[upload_generated] response_payload",
+            response_payload,
+            flush=True,
+        )
+        return jsonify(response_payload)
 
     except Exception as e:
+        print("[upload_generated] exception:", repr(e), flush=True)
+        traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
@@ -294,7 +372,7 @@ def next_image():
         showing_rows = showing_resp.data or []
         if showing_rows:
             item = showing_rows[0]
-            return jsonify({
+            response_payload = {
                 "ok": True,
                 "item": {
                     "id": item["id"],
@@ -303,7 +381,18 @@ def next_image():
                     "status": item["status"]
                 },
                 "display_seconds": DISPLAY_SECONDS
-            })
+            }
+            print(
+                "[next_image] matched_record",
+                {"source": "showing", "record": item},
+                flush=True,
+            )
+            print(
+                "[next_image] response_payload",
+                response_payload,
+                flush=True,
+            )
+            return jsonify(response_payload)
 
         # 没有 showing，就取最早 pending
         pending_resp = (
@@ -319,13 +408,29 @@ def next_image():
 
         pending_rows = pending_resp.data or []
         if not pending_rows:
-            return jsonify({
+            response_payload = {
                 "ok": True,
                 "item": None,
                 "display_seconds": DISPLAY_SECONDS
-            })
+            }
+            print(
+                "[next_image] matched_record",
+                {"source": "pending", "record": None},
+                flush=True,
+            )
+            print(
+                "[next_image] response_payload",
+                response_payload,
+                flush=True,
+            )
+            return jsonify(response_payload)
 
         item = pending_rows[0]
+        print(
+            "[next_image] matched_record",
+            {"source": "pending", "record": item},
+            flush=True,
+        )
 
         # 更新 queue 状态为 showing
         (
@@ -345,7 +450,7 @@ def next_image():
             .execute()
         )
 
-        return jsonify({
+        response_payload = {
             "ok": True,
             "item": {
                 "id": item["id"],
@@ -354,9 +459,17 @@ def next_image():
                 "status": "showing"
             },
             "display_seconds": DISPLAY_SECONDS
-        })
+        }
+        print(
+            "[next_image] response_payload",
+            response_payload,
+            flush=True,
+        )
+        return jsonify(response_payload)
 
     except Exception as e:
+        print("[next_image] exception:", repr(e), flush=True)
+        traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
@@ -415,5 +528,73 @@ def mark_shown():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.post("/update_message")
+def update_message():
+    try:
+        data = request.get_json(silent=True) or {}
+        submission_id = str(data.get("submissionId") or "").strip()
+        message = data.get("message")
+        if not isinstance(message, str):
+            message = ""
+
+        if not submission_id:
+            return jsonify({"ok": False, "error": "missing submissionId"}), 400
+
+        submission_resp = (
+            supabase
+            .table("submissions")
+            .select("id")
+            .eq("id", submission_id)
+            .limit(1)
+            .execute()
+        )
+        submission_rows = submission_resp.data or []
+        if not submission_rows:
+            return jsonify({"ok": False, "error": "submission not found"}), 404
+
+        update_resp = (
+            supabase
+            .table("submissions")
+            .update({"message": message})
+            .eq("id", submission_id)
+            .execute()
+        )
+        update_rows = update_resp.data or []
+        updated_message = message
+        if update_rows and isinstance(update_rows[0], dict):
+            updated_message = update_rows[0].get("message", message)
+
+        return jsonify({
+            "ok": True,
+            "submission": {
+                "id": submission_id,
+                "message": updated_message
+            }
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 if __name__ == "__main__":
+    print("RUNNING APP FROM:", __file__, flush=True)
+    print(
+        "APP OBJECT:",
+        app,
+        "id=",
+        id(app),
+        "import_name=",
+        app.import_name,
+        "root_path=",
+        app.root_path,
+        flush=True,
+    )
+    print("APP URL MAP:", app.url_map, flush=True)
+    for rule in sorted(app.url_map.iter_rules(), key=lambda item: item.rule):
+        methods = ",".join(
+            sorted(method for method in rule.methods if method not in {"HEAD", "OPTIONS"})
+        )
+        print(
+            f"ROUTE: {rule.rule} -> endpoint={rule.endpoint} methods=[{methods}]",
+            flush=True,
+        )
     app.run(debug=True, port=5000)

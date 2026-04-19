@@ -450,6 +450,119 @@
       return `${value.length}:${value.slice(0, 32)}:${value.slice(-32)}`;
     }
 
+    function getBackendBaseUrl() {
+      const savedBase = safeGetItem("ISHIHARA_BACKEND_URL", "").trim();
+      if (savedBase) {
+        return savedBase.replace(/\/+$/, "");
+      }
+
+      return "http://127.0.0.1:5000";
+    }
+
+    function buildConvergeUploadPayload(generatedImage) {
+      const payload = {
+        imageBase64: generatedImage,
+        symbol: "74",
+        sourceName: "web"
+      };
+
+      const originalImageBase64 = safeGetItem("uploadedImage", "");
+      if (isValidImageData(originalImageBase64)) {
+        payload.originalImageBase64 = originalImageBase64;
+      }
+
+      return payload;
+    }
+
+    const CONVERGE_UPLOAD_TIMEOUT_MS = 15000;
+
+    function createUploadError(code, message, details) {
+      const error = new Error(message);
+      error.code = code;
+      if (details && typeof details === "object") {
+        Object.assign(error, details);
+      }
+      return error;
+    }
+
+    async function uploadGeneratedImage(payload) {
+      const abortController = typeof AbortController === "function" ? new AbortController() : null;
+      const timeoutId = abortController
+        ? window.setTimeout(() => { abortController.abort(); }, CONVERGE_UPLOAD_TIMEOUT_MS)
+        : null;
+
+      let response;
+      try {
+        response = await fetch(`${getBackendBaseUrl()}/upload_generated`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload),
+          signal: abortController ? abortController.signal : undefined
+        });
+      } catch (error) {
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+
+        if (error && error.name === "AbortError") {
+          throw createUploadError("upload_timeout", `upload timeout after ${CONVERGE_UPLOAD_TIMEOUT_MS}ms`);
+        }
+
+        throw createUploadError("upload_network_failed", "upload network request failed", {
+          originalErrorName: error && error.name ? error.name : "",
+          originalErrorMessage: error && error.message ? error.message : ""
+        });
+      }
+
+      let result;
+      try {
+        result = await response.json();
+      } catch (error) {
+        if (error && error.name === "AbortError") {
+          throw createUploadError("upload_timeout", `upload timeout after ${CONVERGE_UPLOAD_TIMEOUT_MS}ms`, {
+            status: response.status
+          });
+        }
+
+        throw createUploadError("upload_invalid_json", "upload response is not valid JSON", {
+          status: response.status,
+          statusText: response.statusText || ""
+        });
+      } finally {
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+      }
+
+      if (!response.ok || !result || result.ok !== true) {
+        const message = result && typeof result.error === "string" && result.error.trim()
+          ? result.error.trim()
+          : `upload_failed_${response.status}`;
+        throw createUploadError("upload_backend_rejected", message, {
+          status: response.status,
+          statusText: response.statusText || "",
+          responseOk: !!response.ok
+        });
+      }
+
+      const submissionId = result && result.submission && typeof result.submission.id === "string"
+        ? result.submission.id.trim()
+        : "";
+      if (!submissionId) {
+        throw createUploadError("missing_submission_id", "missing_submission_id", {
+          status: response.status,
+          statusText: response.statusText || ""
+        });
+      }
+
+      return {
+        submissionId,
+        uploadedAt: new Date().toISOString()
+      };
+    }
+
     function canEnterConvergeFlow() {
       const currentStep = safeGetItem("currentStep", "");
       const uploadedImage = safeGetItem("uploadedImage", "");
@@ -746,11 +859,13 @@
     //  汇聚与跳转逻辑
     // ══════════════════════════════════════════════════════════════
     const convergeBtn = document.getElementById('convergeBtn');
-    convergeBtn.addEventListener('click', () => {
+    convergeBtn.addEventListener('click', async () => {
       if (!canEnterConvergeFlow()) {
         return;
       }
-      
+
+      let hasFreshSubmissionId = false;
+
       try {
         const oc = document.getElementById('outputCanvas');
         const generatedImage = oc.toDataURL('image/png');
@@ -769,12 +884,48 @@
         }
 
         const generatedFingerprint = getImageFingerprint(storedGeneratedImage);
-        safeSetItem("finalUploadFingerprint", generatedFingerprint);
-        safeSetItem("finalUploadStatus", "ready");
-        safeSetItem("finalUploadConfirmedAt", "");
+        const storedFingerprint = safeGetItem("finalUploadFingerprint", "");
+        const storedStatus = safeGetItem("finalUploadStatus", "");
 
-        if (!safeSetItem("currentStep", "message")) {
-          showToast("流程状态写入失败", "Flow state could not be stored.");
+        if (storedStatus === "pending" && storedFingerprint === generatedFingerprint) {
+          showToast("正在上传，请稍候", "Upload is already in progress.");
+          return;
+        }
+
+        if (
+          !safeSetItem("finalUploadFingerprint", generatedFingerprint)
+          || !safeSetItem("finalUploadStatus", "pending")
+          || !safeSetItem("finalUploadConfirmedAt", "")
+        ) {
+          throw new Error("upload state storage unavailable");
+        }
+
+        try {
+          const result = await uploadGeneratedImage(buildConvergeUploadPayload(storedGeneratedImage));
+
+          if (!safeSetItem("submissionId", result.submissionId)) {
+            throw new Error("persist_submission_id_failed");
+          }
+          hasFreshSubmissionId = true;
+
+          if (
+            !safeSetItem("finalUploadStatus", "done")
+            || !safeSetItem("finalUploadConfirmedAt", result.uploadedAt || "")
+          ) {
+            throw new Error("persist_upload_state_failed");
+          }
+
+          if (!safeSetItem("currentStep", "message")) {
+            throw new Error("persist_current_step_failed");
+          }
+        } catch (error) {
+          console.error("Converge upload failed:", error);
+          safeSetItem("finalUploadStatus", "ready");
+          safeSetItem("finalUploadConfirmedAt", "");
+          if (!hasFreshSubmissionId) {
+            safeSetItem("submissionId", "");
+          }
+          showToast("上传失败，请重试", "Upload failed. Please retry.");
           return;
         }
 
@@ -787,6 +938,11 @@
 
       } catch (e) {
         console.error("Storage error:", e);
+        safeSetItem("finalUploadStatus", "ready");
+        safeSetItem("finalUploadConfirmedAt", "");
+        if (!hasFreshSubmissionId) {
+          safeSetItem("submissionId", "");
+        }
         showToast("存储空间不足，无法保存图像", "Storage limit reached.");
       }
     });

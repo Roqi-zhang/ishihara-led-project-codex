@@ -265,6 +265,50 @@
       }
     }
 
+    function getBackendBaseUrl() {
+      const savedBase = safeGetItem("ISHIHARA_BACKEND_URL", "").trim();
+      if (savedBase) {
+        return savedBase.replace(/\/+$/, "");
+      }
+
+      return "http://127.0.0.1:5000";
+    }
+
+    async function updateSubmissionMessage(submissionId, message) {
+      let response;
+      try {
+        response = await fetch(`${getBackendBaseUrl()}/update_message`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            submissionId,
+            message
+          })
+        });
+      } catch (error) {
+        throw new Error("message_update_network_failed");
+      }
+
+      let result;
+      try {
+        result = await response.json();
+      } catch (error) {
+        throw new Error("message_update_invalid_response");
+      }
+
+      if (!response.ok || !result || result.ok !== true) {
+        throw new Error(
+          result && typeof result.error === "string" && result.error.trim()
+            ? result.error.trim()
+            : `message_update_failed_${response.status}`
+        );
+      }
+
+      return result;
+    }
+
     // ══════════════════════════════════════════════════════════════
     //  初始化检查逻辑
     // ══════════════════════════════════════════════════════════════
@@ -299,10 +343,25 @@
       }
     });
 
-    codifyBtn.addEventListener('click', () => {
+    codifyBtn.addEventListener('click', async () => {
       // 保存留言痕迹
       const msg = messageInput.value.trim();
       safeSetItem("userMessage", msg);
+
+      const submissionId = safeGetItem("submissionId", "").trim();
+      if (!submissionId) {
+        showToast("缺少上传记录，无法保存留言。", "Missing submission record. Unable to save message.");
+        return;
+      }
+
+      try {
+        await updateSubmissionMessage(submissionId, msg);
+      } catch (error) {
+        console.error("Update message failed:", error);
+        showToast("留言保存失败，请重试。", "Failed to save message. Please retry.");
+        return;
+      }
+
       safeSetItem("currentStep", "inscribe");
       
       // 优雅退场动画
