@@ -73,6 +73,17 @@
 
     let busy = false;
 
+    function buildImageSrc(backendBase, imageUrl) {
+      if (!imageUrl) return '';
+
+      const trimmed = String(imageUrl).trim();
+      if (/^https?:\/\//i.test(trimmed)) {
+        return `${trimmed}${trimmed.includes('?') ? '&' : '?'}t=${Date.now()}`;
+      }
+
+      return `${backendBase}${trimmed}?t=${Date.now()}`;
+    }
+
     async function pollNext() {
       if (busy) return;
       const backendBase = getBackendBase();
@@ -89,7 +100,7 @@
         }
 
         busy = true;
-        img.src = `${backendBase}${item.image_url}?t=${Date.now()}`;
+        img.src = buildImageSrc(backendBase, item.image_url);
         img.style.display = 'block';
         idle.style.display = 'none';
 

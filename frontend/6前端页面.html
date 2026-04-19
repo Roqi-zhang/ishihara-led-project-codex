@@ -383,34 +383,87 @@
       return payload;
     }
 
-    async function uploadGeneratedImage(payload) {
-      const response = await fetch(`${getBackendBaseUrl()}/upload_generated`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
+    const FINAL_UPLOAD_TIMEOUT_MS = 15000;
 
-      let result = {};
+    function createUploadError(code, message, details) {
+      const error = new Error(message);
+      error.code = code;
+      if (details && typeof details === "object") {
+        Object.assign(error, details);
+      }
+      return error;
+    }
+
+    async function uploadGeneratedImage(payload) {
+      const abortController = typeof AbortController === "function" ? new AbortController() : null;
+      const timeoutId = abortController
+        ? window.setTimeout(() => { abortController.abort(); }, FINAL_UPLOAD_TIMEOUT_MS)
+        : null;
+
+      let response;
+      try {
+        response = await fetch(`${getBackendBaseUrl()}/upload_generated`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload),
+          signal: abortController ? abortController.signal : undefined
+        });
+      } catch (error) {
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
+
+        if (error && error.name === "AbortError") {
+          throw createUploadError("upload_timeout", `upload timeout after ${FINAL_UPLOAD_TIMEOUT_MS}ms`);
+        }
+
+        throw createUploadError("upload_network_failed", "upload network request failed", {
+          originalErrorName: error && error.name ? error.name : "",
+          originalErrorMessage: error && error.message ? error.message : ""
+        });
+      }
+
+      let result;
       try {
         result = await response.json();
       } catch (error) {
-        result = {};
+        if (error && error.name === "AbortError") {
+          throw createUploadError("upload_timeout", `upload timeout after ${FINAL_UPLOAD_TIMEOUT_MS}ms`, {
+            status: response.status
+          });
+        }
+
+        throw createUploadError("upload_invalid_json", "upload response is not valid JSON", {
+          status: response.status,
+          statusText: response.statusText || ""
+        });
+      } finally {
+        if (timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
       }
 
       if (!response.ok || !result || result.ok !== true) {
         const message = result && typeof result.error === "string" && result.error.trim()
           ? result.error.trim()
           : `upload_failed_${response.status}`;
-        throw new Error(message);
+        throw createUploadError("upload_backend_rejected", message, {
+          status: response.status,
+          statusText: response.statusText || "",
+          responseOk: !!response.ok
+        });
       }
 
       const submissionId = result && result.submission && typeof result.submission.id === "string"
         ? result.submission.id.trim()
         : "";
       if (!submissionId) {
-        throw new Error("missing_submission_id");
+        throw createUploadError("missing_submission_id", "missing_submission_id", {
+          status: response.status,
+          statusText: response.statusText || ""
+        });
       }
 
       return {

@@ -3,10 +3,11 @@ import base64
 import uuid
 from datetime import datetime, timezone
 
-from flask import Flask, request, jsonify
+import httpx
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 
 # =========================
 # 基础配置
@@ -19,7 +20,13 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("缺少 SUPABASE_URL 或 SUPABASE_KEY，请检查 backend/.env 文件")
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY,
+    options=ClientOptions(
+        httpx_client=httpx.Client(trust_env=False, timeout=30.0)
+    ),
+)
 
 app = Flask(__name__)
 CORS(app)
@@ -111,6 +118,11 @@ def upload_base64_image_to_storage(data_url: str, bucket: str, filename: str):
 @app.get("/health")
 def health():
     return jsonify({"ok": True})
+
+
+@app.get("/display")
+def display_page():
+    return send_from_directory(os.path.dirname(__file__), "display.html")
 
 
 # =========================
