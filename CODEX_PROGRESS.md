@@ -158,6 +158,36 @@ Constraint:
 
 ---
 
+### Task 3
+
+Status: COMPLETED
+
+What was done:
+- Added a deployment-only script to frontend/1前端页面.html that seeds localStorage["ISHIHARA_BACKEND_URL"] with the Render backend URL.
+- The script only runs on https://ishihara-led-project-codex.vercel.app and does not overwrite an existing value.
+
+Why:
+- First-time public users on the Vercel frontend need the correct backend URL automatically.
+- This keeps the existing frontend fetch logic unchanged while providing the deployment address as configuration.
+
+Files changed:
+- frontend/1前端页面.html
+- CODEX_PROGRESS.md
+
+How to verify:
+- Open https://ishihara-led-project-codex.vercel.app/ for the first time
+- In DevTools Console, run: localStorage.getItem("ISHIHARA_BACKEND_URL")
+- Confirm the value is https://ishihara-led-project-codex.onrender.com
+- Pre-set a different ISHIHARA_BACKEND_URL value and refresh; confirm it is not overwritten
+- Open the page locally or on a LAN host; confirm the production Render URL is not auto-written
+- Confirm the existing page transition from Page 1 to Page 2 still works unchanged
+
+Constraint:
+- NO logic change
+- NO API modification
+
+---
+
 ## Execution protocol
 
 For every task:

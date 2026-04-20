@@ -227,6 +227,33 @@
       }
     }
 
+    const AUTO_BACKEND_URL = "https://ishihara-led-project-codex.onrender.com";
+    const AUTO_BACKEND_ORIGINS = new Set([
+      "https://ishihara-led-project-codex.vercel.app"
+    ]);
+
+    function seedBackendBaseUrl() {
+      let existing = "";
+      try {
+        existing = (localStorage.getItem("ISHIHARA_BACKEND_URL") || "").trim();
+      } catch (error) {
+        console.warn("localStorage get failed for ISHIHARA_BACKEND_URL", error);
+        return;
+      }
+
+      if (existing) {
+        return;
+      }
+
+      if (!AUTO_BACKEND_ORIGINS.has(window.location.origin)) {
+        return;
+      }
+
+      safeSetItem("ISHIHARA_BACKEND_URL", AUTO_BACKEND_URL);
+    }
+
+    seedBackendBaseUrl();
+
     const enterBtn = document.getElementById('enterBtn');
     enterBtn.addEventListener('click', () => {
       safeSetItem("currentStep", "reflect");
