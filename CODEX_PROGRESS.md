@@ -188,6 +188,34 @@ Constraint:
 
 ---
 
+### Task 4
+
+Status: COMPLETED
+
+What was done:
+- Increased the Page 4 converge upload timeout from 15000ms to 45000ms.
+
+Why:
+- The POST /upload_generated request was being canceled by the frontend AbortController at about 14.8 seconds.
+- This change gives mobile uploads more time to complete without changing the payload or upload flow.
+
+Files changed:
+- frontend/4前端页面.html
+- CODEX_PROGRESS.md
+
+How to verify:
+- Open Page 4 and perform a real converge upload
+- In Network, confirm OPTIONS /upload_generated still returns normally
+- Confirm POST /upload_generated no longer becomes canceled at about 15 seconds
+- Confirm the request can continue until the backend returns or up to the new timeout window
+- If upload succeeds, confirm the page continues to Page 5 as before
+
+Constraint:
+- NO logic change
+- NO API modification
+
+---
+
 ## Execution protocol
 
 For every task:
