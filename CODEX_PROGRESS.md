@@ -1,68 +1,185 @@
+⚠️ NOTE
+
+This file is a progress log and execution record.
+
+It is NOT the source of truth for system logic or tasks.
+
+The ONLY current task definition is:
+
+→ docs/spec/TASK.md
+
+If any historical entry conflicts with TASK.md:
+
+→ ALWAYS follow TASK.md
+
+---
+
 # CODEX Progress
 
-## Project background
-- Graduation project for a mobile web experience connected to an LED display installation.
-- Core user flow: upload image -> generate Ishihara-style image locally -> send to LED -> LED display queue -> leave a message -> print flow -> payment placeholder -> download digital image.
-- Frontend pages are already fully implemented as standalone HTML files.
-- Current Codex scope is no longer frontend generation. Current scope is frontend integration + minimal backend hookup only.
+## Current Phase
 
-## Current status
-- Frontend pages are already fully implemented as standalone HTML files.
-- System is now entering Integration Phase.
-- No new UI generation is required.
-- Existing HTML pages must be preserved visually.
-- Codex should only connect routing, state, and backend APIs.
+→ PUBLIC DEPLOYMENT PHASE
 
-## Confirmed baseline
-- Supabase is already configured.
-- `submissions` and `display_queue` tables already exist.
-- `original-images` and `generated-images` buckets already exist.
-- The Flask backend backbone is already runnable.
-- `POST /upload_generated` has already been validated successfully.
-- Frozen endpoints that must remain unchanged:
-  - `POST /upload_generated`
-  - `GET /queue`
-  - `GET /next_image`
-  - `POST /mark_shown`
+---
 
-## Frontend baseline
-- Existing frontend pages currently live under `frontend/`
-- Confirmed page files:
-  - `frontend/1前端页面.html`
-  - `frontend/2前端页面.html`
-  - `frontend/3前端界面.html`
-  - `frontend/4前端页面.html`
-  - `frontend/5前端页面.html`
-  - `frontend/6前端页面.html`
+## Current Goal
 
-## Completed tasks
-- Task 0: solidify repository rules and progress tracking.
-- Previous frontend generation phase is considered complete outside Codex.
-- Codex must now treat frontend UI as fixed.
-- Git Task 1: connect the local repository to GitHub and establish the `codex/integration` baseline checkpoint with an explicit whitelist only.
-- Task 1: fix the six existing frontend HTML files so all inter-page `window.location.href` routes use the real current filenames under `frontend/`.
-- Task 2: add defensive localStorage guards and fallback behavior so missing or inaccessible client storage does not cause blank screens or uncaught frontend errors.
-- Task 3: tighten the Resonance page Converge trigger so page 4 cannot proceed unless the flow is at `currentStep=resonance` and a valid rendered image has been produced and stored successfully.
-- Task 4: keep Converge upload-free and move the one-time upload trigger to the final confirmation button on page 6, using a simulated upload lock plus per-image completion markers.
-- Task 5: replace the simulated final-confirmation upload on page 6 with the real `POST /upload_generated` request while preserving one-time locks and success-only completion state.
+Deploy the system to public internet so that:
 
-## Next tasks
-1. Task 6: connect Message page submission to `POST /mark_shown`.
-2. Task 7: verify Inscribe page download and print flow.
-3. Task 8: verify and, if needed, tighten missing-state toast/redirect behavior across the flow.
-4. Task 9: verify full end-to-end flow without visual regressions.
+- users can access via public URL
+- upload images
+- LED display works
+- messages can be submitted
+- Supabase stores data correctly
+- full flow works end-to-end
 
-## Risks
-- Local Wi-Fi to Supabase HTTPS may be unstable.
-- Network instability must not be misdiagnosed as backend logic failure.
-- The project must stay incremental to avoid accidental changes to frozen interfaces or directory structure.
-- Existing frontend HTML must not be overwritten or visually modified.
-- Resonance page includes adjustable Ishihara conversion behavior, so backend upload must happen only after final user confirmation.
+---
 
-## Recovery
-- Start every new step in Ask mode before any code changes.
-- Make only one minimal task change at a time.
-- Stop after each task and wait for user approval.
-- Run the smallest relevant verification after each change.
-- Use a clear checkpoint or commit message as the rollback anchor when approved.
-- Keep `CODEX_PROGRESS.md` updated after every task.
+## System baseline (DO NOT CHANGE)
+
+### Core flow
+
+- Upload MUST happen on Page 4
+- Message submission happens on Page 5
+- Page 6 does NOT upload
+- LED display uses /next_image + /mark_shown
+
+### Backend endpoints (frozen)
+
+- POST /upload_generated
+- POST /update_message
+- GET /next_image
+- POST /mark_shown
+- GET /queue
+
+### Frontend structure
+
+- 6 HTML pages must remain unchanged
+- No UI / layout / structure changes allowed
+
+---
+
+## Allowed scope
+
+Only minimal deployment-related work:
+
+- backend deployment (Render / Railway)
+- frontend deployment (Vercel / Netlify)
+- requirements.txt fixes
+- gunicorn setup
+- Flask production config
+- CORS enabling
+- backend URL configuration
+
+---
+
+## Forbidden scope
+
+- no refactor
+- no UI change
+- no flow change
+- no endpoint change
+- no DB schema change
+- no Supabase modification
+
+---
+
+## Environment requirement
+
+Frontend must support:
+
+localStorage["ISHIHARA_BACKEND_URL"]
+
+After deployment, this should be:
+
+https://your-backend.onrender.com
+
+---
+
+## Task log
+
+---
+
+### Task 1
+
+Status: COMPLETED
+
+What was done:
+- Added missing direct runtime dependencies to backend/requirements.txt:
+  - supabase==2.28.3
+  - python-dotenv==1.2.2
+  - httpx==0.28.1
+
+Why:
+- backend/app.py directly imports and uses supabase, dotenv, and httpx at startup.
+- Public deployment installs from requirements.txt, so these packages must be listed explicitly.
+
+Files changed:
+- backend/requirements.txt
+- CODEX_PROGRESS.md
+
+How to verify:
+- Run: pip install -r backend/requirements.txt
+- Run: python -c "import httpx; from dotenv import load_dotenv; from supabase import create_client"
+- Confirm Flask / flask-cors / gunicorn lines remain unchanged in backend/requirements.txt
+- Confirm no business logic or API code was modified
+
+Constraint:
+- NO logic change
+- NO API modification
+
+---
+
+### Task 2
+
+Status: COMPLETED
+
+What was done:
+- Added frontend/vercel.json with a root path rewrite from / to /1前端页面.html
+
+Why:
+- The frontend directory did not have a root entry mapping for static hosting.
+- This deployment-only config makes the public frontend root URL open Page 1 directly on Vercel.
+
+Files changed:
+- frontend/vercel.json
+- CODEX_PROGRESS.md
+
+How to verify:
+- Confirm frontend/vercel.json exists and only contains the approved rewrites config
+- Deploy with frontend/ as the Vercel Root Directory
+- Visit the public frontend root URL /
+- Confirm / opens 1前端页面.html directly
+- Confirm no HTML, frontend logic, backend logic, or API logic was modified
+
+Constraint:
+- NO logic change
+- NO API modification
+
+---
+
+## Execution protocol
+
+For every task:
+
+1. Ask mode first
+2. One minimal change only
+3. Wait for approval
+4. Implement
+5. Update this file
+6. Report and stop
+
+---
+
+## Risk awareness
+
+- CORS issues
+- HTTPS mixed content
+- Supabase latency
+- mobile network instability
+
+These must NOT lead to logic changes unless confirmed
+
+---
+
+END
