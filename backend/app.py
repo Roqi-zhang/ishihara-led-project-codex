@@ -597,4 +597,4 @@ if __name__ == "__main__":
             f"ROUTE: {rule.rule} -> endpoint={rule.endpoint} methods=[{methods}]",
             flush=True,
         )
-    app.run(debug=True, port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)
