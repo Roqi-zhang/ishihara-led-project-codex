@@ -456,7 +456,7 @@
         return savedBase.replace(/\/+$/, "");
       }
 
-      return `${window.location.protocol}//${window.location.hostname}:5000`;
+      return window.location.origin;
     }
 
     function buildConvergeUploadPayload(generatedImage) {
